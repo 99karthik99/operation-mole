@@ -1,0 +1,299 @@
+import type { CompareNode, EntryInfo } from '@om/shared';
+import clsx from 'clsx';
+import {
+  ChevronRight,
+  Crosshair,
+  File,
+  FileDiff,
+  Folder,
+  FolderOpen,
+  GitCompareArrows,
+  Link2,
+  X,
+} from 'lucide-react';
+import type { KeyboardEvent, MouseEvent } from 'react';
+import { formatBytes } from '../lib/format.ts';
+import { rowKey, type TreeRow } from '../lib/tree.ts';
+
+type Side = 'left' | 'right';
+
+interface CompareTreeProps {
+  rows: TreeRow[];
+  /** File currently selected for an ad-hoc comparison. */
+  selected: CompareNode | undefined;
+  onToggle: (node: CompareNode) => void;
+  onOpen: (node: CompareNode) => void;
+  onSelect: (node: CompareNode | undefined) => void;
+  onCompareWithSelected: (node: CompareNode) => void;
+}
+
+const presentClass: Record<CompareNode['status'], string> = {
+  identical: '',
+  modified: 'bg-modified-soft text-modified',
+  'only-left': 'bg-left-soft text-left',
+  'only-right': 'bg-right-soft text-right',
+  error: 'bg-error-soft text-error',
+};
+
+function EntryIcon({ info, open }: { info: EntryInfo; open: boolean }) {
+  const className = 'size-4 shrink-0 opacity-80';
+  if (info.kind === 'directory') {
+    return open ? (
+      <FolderOpen className={className} aria-hidden />
+    ) : (
+      <Folder className={className} aria-hidden />
+    );
+  }
+  if (info.kind === 'symlink') return <Link2 className={className} aria-hidden />;
+  return <File className={className} aria-hidden />;
+}
+
+function Cell({
+  side,
+  row,
+  primary,
+  onToggle,
+}: {
+  side: Side;
+  row: TreeRow;
+  /** The side whose chevron is exposed to assistive tech (the other is a visual duplicate). */
+  primary: boolean;
+  onToggle: () => void;
+}) {
+  const { node, depth } = row;
+  const info = node[side];
+  const differsInside =
+    row.isDirectory &&
+    node.status === 'modified' &&
+    node.left?.kind === 'directory' &&
+    node.right?.kind === 'directory';
+  const leafStatus = differsInside ? 'identical' : node.status;
+
+  return (
+    <div
+      data-testid={`cell-${side}`}
+      data-present={info ? 'true' : 'false'}
+      className={clsx(
+        'flex min-w-0 items-center gap-1.5 py-1 pr-3',
+        side === 'right' && 'border-l border-line',
+        info ? presentClass[leafStatus] : 'bg-missing',
+      )}
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      {info && (
+        <>
+          {info.kind === 'directory' ? (
+            <button
+              type="button"
+              tabIndex={-1}
+              aria-hidden={primary ? undefined : true}
+              aria-label={row.expanded ? 'Collapse' : 'Expand'}
+              className="rounded p-0.5 hover:bg-hover"
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+              onDoubleClick={(e) => {
+                e.stopPropagation();
+              }}
+            >
+              <ChevronRight
+                className={clsx('size-3.5 transition-transform', row.expanded && 'rotate-90')}
+                aria-hidden
+              />
+            </button>
+          ) : (
+            <span className="w-[18px] shrink-0" />
+          )}
+          <EntryIcon info={info} open={row.expanded} />
+          <span className="truncate">{node.name}</span>
+          {differsInside && (
+            <span
+              className="size-2 shrink-0 rounded-full bg-modified-dot"
+              title="Contains differences"
+            />
+          )}
+          {node.error && (
+            <span className="truncate text-xs" title={node.error}>
+              ({node.error})
+            </span>
+          )}
+          <span className="ml-auto shrink-0 pl-3 text-xs tabular-nums text-muted">
+            {info.kind === 'file'
+              ? formatBytes(info.size)
+              : info.kind === 'symlink'
+                ? `→ ${info.linkTarget ?? ''}`
+                : ''}
+          </span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      tabIndex={-1}
+      title={label}
+      aria-label={label}
+      className="rounded p-1 text-muted hover:bg-hover hover:text-ink"
+      onClick={(e: MouseEvent) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Side-by-side comparison rows: left tree and right tree aligned on the same row list. */
+export function CompareTree({
+  rows,
+  selected,
+  onToggle,
+  onOpen,
+  onSelect,
+  onCompareWithSelected,
+}: CompareTreeProps) {
+  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>, row: TreeRow) => {
+    const el = e.currentTarget;
+    switch (e.key) {
+      case 'Enter':
+        onOpen(row.node);
+        break;
+      case 'ArrowRight':
+        if (row.isDirectory && !row.expanded) onToggle(row.node);
+        break;
+      case 'ArrowLeft':
+        if (row.isDirectory && row.expanded) onToggle(row.node);
+        break;
+      case 'ArrowDown':
+        (el.nextElementSibling as HTMLElement | null)?.focus();
+        break;
+      case 'ArrowUp':
+        (el.previousElementSibling as HTMLElement | null)?.focus();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+  };
+
+  if (rows.length === 0) {
+    return <p className="p-6 text-center text-sm text-muted">Nothing to show here.</p>;
+  }
+
+  return (
+    <div role="tree" aria-label="Comparison" className="text-sm">
+      {rows.map((row) => {
+        const { node } = row;
+        const primarySide: Side = node.left ? 'left' : 'right';
+        const isSelected = selected === node;
+        return (
+          <div
+            key={rowKey(node)}
+            role="treeitem"
+            aria-label={node.name}
+            aria-level={row.depth + 1}
+            aria-expanded={row.isDirectory ? row.expanded : undefined}
+            aria-selected={isSelected}
+            data-status={node.status}
+            tabIndex={0}
+            className={clsx(
+              'group relative grid cursor-default select-none grid-cols-2 border-b border-line/60 outline-none hover:brightness-95 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent dark:hover:brightness-125',
+              isSelected && 'ring-2 ring-inset ring-accent',
+            )}
+            onDoubleClick={() => {
+              onOpen(node);
+            }}
+            onKeyDown={(e) => {
+              onKeyDown(e, row);
+            }}
+          >
+            <Cell
+              side="left"
+              row={row}
+              primary={primarySide === 'left'}
+              onToggle={() => {
+                onToggle(node);
+              }}
+            />
+            <Cell
+              side="right"
+              row={row}
+              primary={primarySide === 'right'}
+              onToggle={() => {
+                onToggle(node);
+              }}
+            />
+            <div className="absolute inset-y-0 right-1 hidden items-center gap-0.5 rounded bg-surface/95 px-1 shadow-sm group-focus-within:flex group-hover:flex">
+              {row.isDirectory ? (
+                <ActionButton
+                  label="Open folder"
+                  onClick={() => {
+                    onOpen(node);
+                  }}
+                >
+                  <FolderOpen className="size-4" aria-hidden />
+                </ActionButton>
+              ) : (
+                <>
+                  <ActionButton
+                    label="Open diff"
+                    onClick={() => {
+                      onOpen(node);
+                    }}
+                  >
+                    <FileDiff className="size-4" aria-hidden />
+                  </ActionButton>
+                  {isSelected ? (
+                    <ActionButton
+                      label="Clear selection"
+                      onClick={() => {
+                        onSelect(undefined);
+                      }}
+                    >
+                      <X className="size-4" aria-hidden />
+                    </ActionButton>
+                  ) : selected !== undefined ? (
+                    <ActionButton
+                      label="Compare with selected"
+                      onClick={() => {
+                        onCompareWithSelected(node);
+                      }}
+                    >
+                      <GitCompareArrows className="size-4" aria-hidden />
+                    </ActionButton>
+                  ) : (
+                    <ActionButton
+                      label="Select for compare"
+                      onClick={() => {
+                        onSelect(node);
+                      }}
+                    >
+                      <Crosshair className="size-4" aria-hidden />
+                    </ActionButton>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}

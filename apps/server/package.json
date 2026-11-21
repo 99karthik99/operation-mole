@@ -1,0 +1,18 @@
+{
+  "name": "@om/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --watch src/index.ts",
+    "start": "NODE_ENV=production node src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/static": "^10.1.12",
+    "@om/shared": "^0.0.0",
+    "fastify": "^5.12.8",
+    "simple-git": "^4.1.0",
+    "zod": "^4.6.7"
+  }
+}
