@@ -1,6 +1,7 @@
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 const number = new Intl.NumberFormat('en', { maximumFractionDigits: 1 });
 
+/** Human-readable size in 1024-based units, e.g. `1.5 KB`. */
 export function formatBytes(bytes: number): string {
   let value = bytes;
   let unit = 0;
@@ -12,7 +13,7 @@ export function formatBytes(bytes: number): string {
 }
 
 const relative = new Intl.RelativeTimeFormat('en', { numeric: 'auto' });
-const STEPS: [Intl.RelativeTimeFormatUnit, number][] = [
+const STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ['second', 60],
   ['minute', 60],
   ['hour', 24],

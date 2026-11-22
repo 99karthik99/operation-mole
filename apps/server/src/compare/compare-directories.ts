@@ -41,18 +41,18 @@ async function rootInfo(abs: string): Promise<EntryInfo> {
 }
 
 async function listDir(abs: string | undefined): Promise<string[]> {
-  return abs === undefined ? [] : limit(() => readdir(abs));
+  return abs === undefined ? [] : await limit(() => readdir(abs));
 }
 
-interface Side {
+type Side = {
   abs: string;
   info: EntryInfo;
-}
+};
 
-interface RootIgnore {
+type RootIgnore = {
   left?: readonly string[];
   right?: readonly string[];
-}
+};
 
 async function compareChildren(
   rel: string,
@@ -149,28 +149,34 @@ function summarize(root: CompareNode): CompareSummary {
   };
   const visit = (node: CompareNode) => {
     const sides = [node.left, node.right].filter((s) => s !== undefined);
-    const allDirs = sides.length > 0 && sides.every((s) => s.kind === 'directory');
+    const isFolder = sides.length > 0 && sides.every((s) => s.kind === 'directory');
     if (node.status === 'error') summary.errors++;
-    else if (!allDirs) {
+    else if (!isFolder) {
       if (node.status === 'identical') summary.identical++;
       else if (node.status === 'modified') summary.modified++;
       else if (node.status === 'only-left') summary.onlyLeft++;
       else summary.onlyRight++;
     }
-    node.children?.forEach(visit);
+    for (const child of node.children ?? []) visit(child);
   };
   visit(root);
   return summary;
 }
 
 /** Recursively compares two directory trees by relative path and byte content. */
-export interface CompareOptions {
+export type CompareOptions = {
   /** Entry names to skip at the top level of each side (e.g. a git checkout's `.git`). */
   ignoreAtRoot?: RootIgnore;
   leftLabel?: string;
   rightLabel?: string;
-}
+};
 
+/**
+ * Recursively compares two folders by relative path and byte content. Symlinks are compared by
+ * target, never followed; folders come first, then files (see sort.ts).
+ *
+ * @throws CompareInputError when a root does not exist or is not a folder.
+ */
 export async function compareDirectories(
   left: string,
   right: string,

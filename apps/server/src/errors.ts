@@ -8,10 +8,12 @@ export class NotFoundError extends Error {
   override name = 'NotFoundError';
 }
 
+/** A readable message for any thrown value (`catch` gives `unknown`). */
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
 
+/** Narrows a caught value to a Node system error, so its `code` (e.g. `ENOENT`) can be read. */
 export function isErrnoException(err: unknown): err is NodeJS.ErrnoException {
   return err instanceof Error && 'code' in err;
 }

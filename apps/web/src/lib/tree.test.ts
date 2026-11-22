@@ -109,6 +109,17 @@ describe('joinPath', () => {
     expect(joinPath('/a', '')).toBe('/a');
     expect(joinPath('/', 'x')).toBe('/x');
   });
+
+  it('joins Windows roots with backslashes', () => {
+    expect(joinPath('C:\\a\\b', 'c/d.txt')).toBe('C:\\a\\b\\c\\d.txt');
+    expect(joinPath('C:\\a\\b\\', 'c')).toBe('C:\\a\\b\\c');
+    expect(joinPath('C:\\', 'x')).toBe('C:\\x');
+    expect(joinPath('C:\\a', '')).toBe('C:\\a');
+  });
+
+  it('keeps forward slashes for Windows roots written with them', () => {
+    expect(joinPath('C:/a/b/', 'c/d.txt')).toBe('C:/a/b/c/d.txt');
+  });
 });
 
 describe('rowKey', () => {

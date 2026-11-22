@@ -5,14 +5,17 @@
   "type": "module",
   "scripts": {
     "dev": "node --watch src/index.ts",
-    "start": "NODE_ENV=production node src/index.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "start": "node src/index.ts --production",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@fastify/static": "^10.1.12",
-    "@om/shared": "^0.0.0",
+    "@om/shared": "workspace:*",
     "fastify": "^5.12.8",
     "simple-git": "^4.1.0",
     "zod": "^4.6.7"
+  },
+  "engines": {
+    "node": ">=26"
   }
 }

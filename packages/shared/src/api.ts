@@ -12,16 +12,18 @@ export type EntryKind = 'file' | 'directory' | 'symlink';
  */
 export type CompareStatus = 'identical' | 'modified' | 'only-left' | 'only-right' | 'error';
 
-export interface EntryInfo {
+/** One side of a compared entry, as seen by `lstat` (symlinks are not followed). */
+export type EntryInfo = {
   kind: EntryKind;
   /** Size in bytes (0 for directories). */
   size: number;
   mtimeMs: number;
   /** Link target, for symlinks only. */
   linkTarget?: string;
-}
+};
 
-export interface CompareNode {
+/** One entry of a folder comparison; folders carry their children. */
+export type CompareNode = {
   /** Entry name ('' for the root). */
   name: string;
   /** Path relative to the compared roots, POSIX separators ('' for the root). */
@@ -32,18 +34,19 @@ export interface CompareNode {
   /** Present when the entry is a directory on at least one side. Sorted: directories first, then by name. */
   children?: CompareNode[];
   error?: string;
-}
+};
 
 /** Counts of non-directory entries (files and symlinks) by status. */
-export interface CompareSummary {
+export type CompareSummary = {
   identical: number;
   modified: number;
   onlyLeft: number;
   onlyRight: number;
   errors: number;
-}
+};
 
-export interface DirectoryCompareResult {
+/** Response of `POST /api/compare/directories`. */
+export type DirectoryCompareResult = {
   /** Absolute root folders that were compared (a checkout folder for git sources). */
   left: string;
   right: string;
@@ -52,9 +55,10 @@ export interface DirectoryCompareResult {
   rightLabel: string;
   root: CompareNode;
   summary: CompareSummary;
-}
+};
 
-export interface FileContent {
+/** One side of a file diff. Binary or too-large files carry no `content`. */
+export type FileContent = {
   path: string;
   size: number;
   sha256: string;
@@ -63,34 +67,38 @@ export interface FileContent {
   content?: string;
   /** True when the file is text but too large to show. */
   tooLarge?: boolean;
-}
+};
 
-export interface FileCompareResult {
+/** Response of `GET /api/compare/files`. A missing side means only one file was given. */
+export type FileCompareResult = {
   left?: FileContent;
   right?: FileContent;
   /** True when both files are present and byte-for-byte equal. */
   identical: boolean;
-}
+};
 
-export interface ApiError {
+/** Body of every 4xx/5xx API response. */
+export type ApiError = {
   message: string;
-}
+};
 
 /** Default folders the app compares when none are given (the repo's examples by default). */
-export interface DefaultsResponse {
+export type DefaultsResponse = {
   left?: string;
   right?: string;
-}
+};
 
-export interface SessionSummary {
+/** A session as listed on the Sessions page. Timestamps are ISO-8601. */
+export type SessionSummary = {
   id: string;
   name: string;
   createdAt: string;
   updatedAt: string;
   repoCount: number;
-}
+};
 
-export interface RepoInfo {
+/** A repo cloned into a session. */
+export type RepoInfo = {
   id: string;
   url: string;
   /** Short display name, e.g. "delta" for https://github.com/acme/delta.git. */
@@ -99,20 +107,22 @@ export interface RepoInfo {
   branches: string[];
   /** When the repo was cloned or last fetched. */
   fetchedAt: string;
-}
+};
 
-export interface RecentComparison {
+/** A comparison remembered in a session, newest first. Repeating one moves it to the top. */
+export type RecentComparison = {
   id: string;
   left: Source;
   right: Source;
   leftLabel: string;
   rightLabel: string;
   comparedAt: string;
-}
+};
 
-export interface SessionDetail {
+/** Response of `GET /api/users/:user/sessions/:sessionId`. */
+export type SessionDetail = {
   user: string;
   session: SessionSummary;
   repos: RepoInfo[];
   recent: RecentComparison[];
-}
+};

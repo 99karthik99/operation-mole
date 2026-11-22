@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { open, readFile, stat } from 'node:fs/promises';
+import { pipeline } from 'node:stream/promises';
 import type { FileContent } from '@om/shared';
 import { CompareInputError, NotFoundError, isErrnoException } from '../errors.ts';
 
@@ -8,7 +9,7 @@ const BINARY_SNIFF_BYTES = 8000;
 
 async function sha256(abs: string): Promise<string> {
   const hash = createHash('sha256');
-  for await (const chunk of createReadStream(abs)) hash.update(chunk as Buffer);
+  await pipeline(createReadStream(abs), hash);
   return hash.digest('hex');
 }
 
@@ -38,9 +39,9 @@ export async function readFileForDiff(abs: string, maxTextBytes: number): Promis
     throw err;
   }
 
-  const [hash, binary] = await Promise.all([sha256(abs), looksBinary(abs)]);
-  const result: FileContent = { path: abs, size, sha256: hash, binary };
-  if (!binary) {
+  const [hash, isBinary] = await Promise.all([sha256(abs), looksBinary(abs)]);
+  const result: FileContent = { path: abs, size, sha256: hash, binary: isBinary };
+  if (!isBinary) {
     if (size > maxTextBytes) result.tooLarge = true;
     else result.content = await readFile(abs, 'utf8');
   }

@@ -2,10 +2,10 @@ import type { CompareNode, CompareSummary, Source } from '@om/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { ChevronRight, Home, RefreshCw } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type JSX } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useSearchParams } from 'react-router';
-import { CompareTree } from '../components/CompareTree.tsx';
-import { CompareForm } from '../components/CompareForm.tsx';
+import { CompareTree } from '../components/compare-tree.tsx';
+import { CompareForm } from '../components/compare-form.tsx';
 import { compareDirectories, getDefaults } from '../lib/api.ts';
 import { sessionKey, useSessionDetail, useSessionParams } from '../lib/session.ts';
 import { sourceFromParams, sourcesSearch } from '../lib/sources.ts';
@@ -20,25 +20,27 @@ import {
   type TreeFilter,
 } from '../lib/tree.ts';
 
-const chips: { key: keyof CompareSummary; filter: TreeFilter; label: string; dot: string }[] = [
-  { key: 'identical', filter: 'identical', label: 'Identical', dot: 'bg-muted' },
-  { key: 'modified', filter: 'modified', label: 'Different', dot: 'bg-modified-dot' },
-  { key: 'onlyLeft', filter: 'only-left', label: 'Only in base', dot: 'bg-left-dot' },
-  { key: 'onlyRight', filter: 'only-right', label: 'Only in target', dot: 'bg-right-dot' },
-  { key: 'errors', filter: 'error', label: 'Errors', dot: 'bg-error-dot' },
-];
+const chips: Array<{ key: keyof CompareSummary; filter: TreeFilter; label: string; dot: string }> =
+  [
+    { key: 'identical', filter: 'identical', label: 'Identical', dot: 'bg-muted' },
+    { key: 'modified', filter: 'modified', label: 'Different', dot: 'bg-modified-dot' },
+    { key: 'onlyLeft', filter: 'only-left', label: 'Only in base', dot: 'bg-left-dot' },
+    { key: 'onlyRight', filter: 'only-right', label: 'Only in target', dot: 'bg-right-dot' },
+    { key: 'errors', filter: 'error', label: 'Errors', dot: 'bg-error-dot' },
+  ];
 
 /** Search string with `changes` applied (undefined/empty deletes the key). */
 function withParams(params: URLSearchParams, changes: Record<string, string | undefined>): string {
   const next = new URLSearchParams(params);
   for (const [key, value] of Object.entries(changes)) {
-    if (value) next.set(key, value);
+    if (value !== undefined && value !== '') next.set(key, value);
     else next.delete(key);
   }
   return `?${next}`;
 }
 
-export function DirectoryComparePage() {
+/** Folders: pick Base and Target and browse the comparison tree. All state lives in the URL. */
+export function DirectoryComparePage(): JSX.Element {
   const [params] = useSearchParams();
   const navigate = useNavigate();
   const { user, sessionId } = useSessionParams();
@@ -86,18 +88,18 @@ function DefaultFolders() {
   const query = useQuery({ queryKey: ['defaults'], queryFn: getDefaults, staleTime: Infinity });
   if (query.isPending) return null;
   const { left, right } = query.data ?? {};
-  if (left && right) {
+  if (left !== undefined && left !== '' && right !== undefined && right !== '') {
     return <Navigate replace to={{ search: `?${new URLSearchParams({ left, right })}` }} />;
   }
   return <EmptyHint />;
 }
 
-interface ComparisonProps {
+type ComparisonProps = {
   left: Source;
   right: Source;
   user: string;
   sessionId: string;
-}
+};
 
 function Comparison({ left, right, user, sessionId }: ComparisonProps) {
   const [params] = useSearchParams();
@@ -130,8 +132,8 @@ function Comparison({ left, right, user, sessionId }: ComparisonProps) {
 
   const openFiles = (l: string | undefined, r: string | undefined) => {
     const search = new URLSearchParams();
-    if (l) search.set('left', l);
-    if (r) search.set('right', r);
+    if (l !== undefined && l !== '') search.set('left', l);
+    if (r !== undefined && r !== '') search.set('right', r);
     search.set('from', location.pathname + location.search);
     void navigate(`${sessionPath(user, sessionId, 'files')}?${search}`);
   };
@@ -267,7 +269,7 @@ function Comparison({ left, right, user, sessionId }: ComparisonProps) {
         <nav aria-label="Breadcrumb">
           <ol className="flex flex-wrap items-center gap-1">
             {crumbs.map((crumb, i) => {
-              const last = i === crumbs.length - 1;
+              const isLast = i === crumbs.length - 1;
               const label =
                 crumb.path === '' ? (
                   <span className="flex items-center gap-1">
@@ -280,7 +282,7 @@ function Comparison({ left, right, user, sessionId }: ComparisonProps) {
               return (
                 <li key={crumb.path} className="flex items-center gap-1">
                   {i > 0 && <ChevronRight className="size-3.5 text-muted" aria-hidden />}
-                  {last ? (
+                  {isLast ? (
                     <span aria-current="page" className="font-medium">
                       {label}
                     </span>

@@ -1,6 +1,8 @@
+import type { JSX } from 'react';
 import { Link } from 'react-router';
 
-export function PlaceholderPage() {
+/** Lab: reserved for the next experience. */
+export function PlaceholderPage(): JSX.Element {
   return (
     <div className="m-auto max-w-md p-8 text-center text-muted">
       <h1 className="mb-2 text-lg font-semibold text-ink">Lab</h1>
@@ -9,7 +11,8 @@ export function PlaceholderPage() {
   );
 }
 
-export function NotFoundPage() {
+/** Shown for any URL that matches no route. */
+export function NotFoundPage(): JSX.Element {
   return (
     <div className="m-auto max-w-md p-8 text-center text-muted">
       <h1 className="mb-2 text-lg font-semibold text-ink">Page not found</h1>

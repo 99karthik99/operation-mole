@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import type { RecentComparison, RepoInfo, SessionSummary, Source } from '@om/shared';
+import { SourceSchema } from '@om/shared';
+import { z } from 'zod';
 import { ConflictError } from '../errors.ts';
 
 const MAX_RECENT = 20;
@@ -42,77 +44,74 @@ const SCHEMA = `
   );
 `;
 
-export interface RepoRecord extends RepoInfo {
+/** A cloned repo as stored: the API fields plus the session that owns it. */
+export type RepoRecord = {
   sessionId: string;
-}
+} & RepoInfo;
 
+/** What {@link Store.saveRepo} takes: a new repo, or an existing one when `id` is set. */
 export type RepoInput = Omit<RepoRecord, 'id' | 'fetchedAt'> & { id?: string };
 
-export interface ComparisonInput {
+/** A comparison to record in a session's recent list. */
+export type ComparisonInput = {
   left: Source;
   right: Source;
   leftLabel: string;
   rightLabel: string;
-}
+};
 
-interface SessionRow {
-  id: string;
-  name: string;
-  created_at: string;
-  updated_at: string;
-  repo_count: number;
-}
+/** A TEXT column holding JSON, validated against `schema`. */
+const jsonColumn = <T extends z.ZodType>(schema: T) =>
+  z
+    .string()
+    .transform((text): unknown => JSON.parse(text))
+    .pipe(schema);
 
-interface RepoRow {
-  id: string;
-  session_id: string;
-  url: string;
-  name: string;
-  default_branch: string;
-  branches: string;
-  fetched_at: string;
-}
+/*
+ * Rows are parsed, not cast: SQL aliases give them the API's camelCase names, and these
+ * schemas check every column, so a schema change that breaks a row fails loudly.
+ */
+const SessionRowSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  repoCount: z.number(),
+}) satisfies z.ZodType<SessionSummary>;
 
-interface ComparisonRow {
-  id: string;
-  left_src: string;
-  right_src: string;
-  left_label: string;
-  right_label: string;
-  compared_at: string;
-}
+const RepoRowSchema = z.object({
+  id: z.string(),
+  sessionId: z.string(),
+  url: z.string(),
+  name: z.string(),
+  defaultBranch: z.string(),
+  branches: jsonColumn(z.array(z.string())),
+  fetchedAt: z.string(),
+}) satisfies z.ZodType<RepoRecord>;
 
-const toSession = (r: SessionRow): SessionSummary => ({
-  id: r.id,
-  name: r.name,
-  createdAt: r.created_at,
-  updatedAt: r.updated_at,
-  repoCount: r.repo_count,
-});
-
-const toRepo = (r: RepoRow): RepoRecord => ({
-  id: r.id,
-  sessionId: r.session_id,
-  url: r.url,
-  name: r.name,
-  defaultBranch: r.default_branch,
-  branches: JSON.parse(r.branches) as string[],
-  fetchedAt: r.fetched_at,
-});
-
-const toComparison = (r: ComparisonRow): RecentComparison => ({
-  id: r.id,
-  left: JSON.parse(r.left_src) as Source,
-  right: JSON.parse(r.right_src) as Source,
-  leftLabel: r.left_label,
-  rightLabel: r.right_label,
-  comparedAt: r.compared_at,
-});
+const ComparisonRowSchema = z.object({
+  id: z.string(),
+  left: jsonColumn(SourceSchema),
+  right: jsonColumn(SourceSchema),
+  leftLabel: z.string(),
+  rightLabel: z.string(),
+  comparedAt: z.string(),
+}) satisfies z.ZodType<RecentComparison>;
 
 const SESSION_SELECT = `
-  SELECT s.id, s.name, s.created_at, s.updated_at,
-         (SELECT COUNT(*) FROM repos r WHERE r.session_id = s.id) AS repo_count
+  SELECT s.id, s.name, s.created_at AS createdAt, s.updated_at AS updatedAt,
+         (SELECT COUNT(*) FROM repos r WHERE r.session_id = s.id) AS repoCount
   FROM sessions s`;
+
+const REPO_SELECT = `
+  SELECT id, session_id AS sessionId, url, name, default_branch AS defaultBranch, branches,
+         fetched_at AS fetchedAt
+  FROM repos`;
+
+const COMPARISON_SELECT = `
+  SELECT id, left_src AS "left", right_src AS "right", left_label AS leftLabel,
+         right_label AS rightLabel, compared_at AS comparedAt
+  FROM comparisons`;
 
 /** Users, sessions, cloned repos and recent comparisons, in SQLite. */
 export class Store {
@@ -138,15 +137,15 @@ export class Store {
       .prepare(
         `${SESSION_SELECT} WHERE s.username = ? ORDER BY s.updated_at DESC, s.created_at DESC`,
       )
-      .all(user) as unknown as SessionRow[];
-    return rows.map(toSession);
+      .all(user);
+    return rows.map((row) => SessionRowSchema.parse(row));
   }
 
   getSession(user: string, id: string): SessionSummary | undefined {
     const row = this.#db
       .prepare(`${SESSION_SELECT} WHERE s.username = ? AND s.id = ?`)
-      .get(user, id) as unknown as SessionRow | undefined;
-    return row && toSession(row);
+      .get(user, id);
+    return row === undefined ? undefined : SessionRowSchema.parse(row);
   }
 
   createSession(user: string, name: string): SessionSummary {
@@ -162,14 +161,14 @@ export class Store {
         )
         .run(id, user, name, now, now);
     } catch (err) {
-      if (err instanceof Error && /UNIQUE/.test(err.message)) {
+      if (err instanceof Error && err.message.includes('UNIQUE')) {
         throw new ConflictError(`You already have a session named "${name}"`);
       }
       throw err;
     }
-    const created = this.getSession(user, id);
-    if (!created) throw new Error('Session was not created');
-    return created;
+    const session = this.getSession(user, id);
+    if (session === undefined) throw new Error('Session was not created');
+    return session;
   }
 
   touchSession(user: string, id: string): void {
@@ -187,23 +186,23 @@ export class Store {
 
   listRepos(sessionId: string): RepoRecord[] {
     const rows = this.#db
-      .prepare('SELECT * FROM repos WHERE session_id = ? ORDER BY name, url')
-      .all(sessionId) as unknown as RepoRow[];
-    return rows.map(toRepo);
+      .prepare(`${REPO_SELECT} WHERE session_id = ? ORDER BY name, url`)
+      .all(sessionId);
+    return rows.map((row) => RepoRowSchema.parse(row));
   }
 
   getRepo(sessionId: string, repoId: string): RepoRecord | undefined {
     const row = this.#db
-      .prepare('SELECT * FROM repos WHERE session_id = ? AND id = ?')
-      .get(sessionId, repoId) as unknown as RepoRow | undefined;
-    return row && toRepo(row);
+      .prepare(`${REPO_SELECT} WHERE session_id = ? AND id = ?`)
+      .get(sessionId, repoId);
+    return row === undefined ? undefined : RepoRowSchema.parse(row);
   }
 
   findRepoByUrl(sessionId: string, url: string): RepoRecord | undefined {
     const row = this.#db
-      .prepare('SELECT * FROM repos WHERE session_id = ? AND url = ?')
-      .get(sessionId, url) as unknown as RepoRow | undefined;
-    return row && toRepo(row);
+      .prepare(`${REPO_SELECT} WHERE session_id = ? AND url = ?`)
+      .get(sessionId, url);
+    return row === undefined ? undefined : RepoRowSchema.parse(row);
   }
 
   /** Inserts a repo, or updates it when `id` is given; `fetchedAt` is set to now. */
@@ -227,7 +226,7 @@ export class Store {
         this.#timestamp(),
       );
     const saved = this.getRepo(input.sessionId, id);
-    if (!saved) throw new Error('Repo was not saved');
+    if (saved === undefined) throw new Error('Repo was not saved');
     return saved;
   }
 
@@ -264,8 +263,8 @@ export class Store {
 
   listComparisons(sessionId: string): RecentComparison[] {
     const rows = this.#db
-      .prepare('SELECT * FROM comparisons WHERE session_id = ? ORDER BY compared_at DESC LIMIT ?')
-      .all(sessionId, MAX_RECENT) as unknown as ComparisonRow[];
-    return rows.map(toComparison);
+      .prepare(`${COMPARISON_SELECT} WHERE session_id = ? ORDER BY compared_at DESC LIMIT ?`)
+      .all(sessionId, MAX_RECENT);
+    return rows.map((row) => ComparisonRowSchema.parse(row));
   }
 }

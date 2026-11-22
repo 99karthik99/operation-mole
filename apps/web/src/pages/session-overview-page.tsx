@@ -1,7 +1,7 @@
 import type { RepoInfo } from '@om/shared';
 import clsx from 'clsx';
 import { ArrowLeftRight, GitBranch, History, LoaderCircle, Plus, RefreshCw } from 'lucide-react';
-import { useId, useState, type SubmitEvent } from 'react';
+import { useId, useState, type JSX, type SubmitEvent } from 'react';
 import { Link } from 'react-router';
 import { formatRelative } from '../lib/format.ts';
 import { useRepoActions, useSessionDetail, useSessionParams } from '../lib/session.ts';
@@ -10,7 +10,8 @@ import { sessionPath } from '../lib/urls.ts';
 
 const card = 'rounded-lg border border-line bg-surface';
 
-export function SessionOverviewPage() {
+/** A session's home: its repos (with Fetch latest) and recent comparisons. */
+export function SessionOverviewPage(): JSX.Element {
   const { user, sessionId } = useSessionParams();
   const session = useSessionDetail(user, sessionId);
   const folders = sessionPath(user, sessionId, 'folders');
@@ -160,7 +161,7 @@ function RepoSection({
           className={clsx(card, 'divide-y divide-line overflow-hidden')}
         >
           {repos.map((repo) => {
-            const fetching = fetchLatest.isPending && fetchLatest.variables === repo.id;
+            const isFetching = fetchLatest.isPending && fetchLatest.variables === repo.id;
             return (
               <li key={repo.id} className="flex items-center gap-3 px-4 py-2.5">
                 <div className="min-w-0 flex-1">
@@ -174,13 +175,13 @@ function RepoSection({
                 <button
                   type="button"
                   aria-label={`Fetch latest for ${repo.name}`}
-                  disabled={fetching}
+                  disabled={isFetching}
                   className="flex items-center gap-1 rounded-md border border-line px-2.5 py-1 text-sm text-muted hover:bg-hover hover:text-ink disabled:opacity-50"
                   onClick={() => {
                     fetchLatest.mutate(repo.id);
                   }}
                 >
-                  <RefreshCw className={clsx('size-4', fetching && 'animate-spin')} aria-hidden />
+                  <RefreshCw className={clsx('size-4', isFetching && 'animate-spin')} aria-hidden />
                   Fetch latest
                 </button>
               </li>

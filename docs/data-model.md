@@ -6,6 +6,8 @@ All state lives under the data folder: `OM_DATA_DIR`, by default `.data/` in the
 
 The database is opened with Node's built-in `node:sqlite` (`DatabaseSync`) in `apps/server/src/store/store.ts`. The schema is created with `CREATE TABLE IF NOT EXISTS` at startup, and foreign keys are on, so deleting a row also deletes the rows that depend on it.
 
+Columns are snake_case. Queries alias them to the API's camelCase names (`created_at AS createdAt`), and every row is parsed with a zod schema rather than cast, so a mismatch between a query and its type fails loudly. JSON columns (`branches`, `left_src`, `right_src`) are parsed and validated the same way.
+
 ```
 users (username PK, created_at)
   └─< sessions (id PK, username FK, name, created_at, updated_at, UNIQUE(username, name COLLATE NOCASE))

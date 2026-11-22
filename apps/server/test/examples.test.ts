@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import type { CompareNode, CompareStatus, EntryKind } from '@om/shared';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { compareDirectories } from '../src/compare/compare-directories.ts';
+import { hasExampleSymlinks } from './capabilities.ts';
 
 /**
  * The repo's examples/ folders double as a demo of every case the app handles.
@@ -21,16 +22,16 @@ const kindOf = (n: CompareNode): EntryKind | undefined => (n.left ?? n.right)?.k
 function find(path: string, kind?: EntryKind): CompareNode {
   let node = root;
   const parts = path.split('/');
-  parts.forEach((part, i) => {
-    const last = i === parts.length - 1;
+  for (const [i, part] of parts.entries()) {
+    const isLast = i === parts.length - 1;
     const matches = node.children?.filter((c) => c.name === part) ?? [];
     const next =
-      last && kind
+      isLast && kind !== undefined
         ? matches.find((c) => kindOf(c) === kind)
         : (matches.find((c) => c.children) ?? matches[0]);
     if (!next) throw new Error(`examples are missing ${path}`);
     node = next;
-  });
+  }
   return node;
 }
 
@@ -93,7 +94,8 @@ describe('examples cover every case', () => {
     expect(find(path, kind).status).toBe(status);
   });
 
-  it('has symlinks on both sides', () => {
+  // Git checks symlinks out as plain files when core.symlinks is false (the Windows default).
+  it.runIf(hasExampleSymlinks)('has symlinks on both sides', () => {
     expect(find('links/same-target').left?.kind).toBe('symlink');
     expect(find('links/link-or-file').left?.kind).toBe('symlink');
     expect(find('links/link-or-file').right?.kind).toBe('file');

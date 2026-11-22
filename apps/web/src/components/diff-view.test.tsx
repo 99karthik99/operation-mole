@@ -1,7 +1,7 @@
 import { render } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { setTheme } from '../lib/theme.ts';
-import { DiffView } from './DiffView.tsx';
+import { DiffView } from './diff-view.tsx';
 
 // Monaco needs a real browser; capture the props passed to it instead.
 const diffEditorProps = vi.hoisted(() => ({
@@ -15,7 +15,7 @@ vi.mock('@monaco-editor/react', () => ({
   },
 }));
 
-const options = () => diffEditorProps.current?.options as Record<string, unknown>;
+const options = () => diffEditorProps.current?.['options'] as Record<string, unknown>;
 
 beforeEach(() => {
   diffEditorProps.current = undefined;

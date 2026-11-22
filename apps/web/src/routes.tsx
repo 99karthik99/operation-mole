@@ -1,12 +1,13 @@
 import { Navigate, type RouteObject } from 'react-router';
-import { AppShell } from './components/AppShell.tsx';
-import { DirectoryComparePage } from './pages/DirectoryComparePage.tsx';
-import { FileComparePage } from './pages/FileComparePage.tsx';
-import { NotFoundPage, PlaceholderPage } from './pages/PlaceholderPage.tsx';
-import { SessionOverviewPage } from './pages/SessionOverviewPage.tsx';
-import { SessionsPage } from './pages/SessionsPage.tsx';
-import { WelcomePage } from './pages/WelcomePage.tsx';
+import { AppShell } from './components/app-shell.tsx';
+import { DirectoryComparePage } from './pages/directory-compare-page.tsx';
+import { FileComparePage } from './pages/file-compare-page.tsx';
+import { NotFoundPage, PlaceholderPage } from './pages/placeholder-page.tsx';
+import { SessionOverviewPage } from './pages/session-overview-page.tsx';
+import { SessionsPage } from './pages/sessions-page.tsx';
+import { WelcomePage } from './pages/welcome-page.tsx';
 
+/** All app routes. The session lives in the path; each page keeps its own state in the query. */
 export const routes: RouteObject[] = [
   {
     path: '/',

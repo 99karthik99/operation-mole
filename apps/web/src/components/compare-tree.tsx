@@ -11,13 +11,13 @@ import {
   Link2,
   X,
 } from 'lucide-react';
-import type { KeyboardEvent, MouseEvent } from 'react';
+import type { JSX, KeyboardEvent, MouseEvent } from 'react';
 import { formatBytes } from '../lib/format.ts';
 import { rowKey, type TreeRow } from '../lib/tree.ts';
 
 type Side = 'left' | 'right';
 
-interface CompareTreeProps {
+type CompareTreeProps = {
   rows: TreeRow[];
   /** File currently selected for an ad-hoc comparison. */
   selected: CompareNode | undefined;
@@ -25,7 +25,7 @@ interface CompareTreeProps {
   onOpen: (node: CompareNode) => void;
   onSelect: (node: CompareNode | undefined) => void;
   onCompareWithSelected: (node: CompareNode) => void;
-}
+};
 
 const presentClass: Record<CompareNode['status'], string> = {
   identical: '',
@@ -62,12 +62,12 @@ function Cell({
 }) {
   const { node, depth } = row;
   const info = node[side];
-  const differsInside =
+  const hasDifferencesInside =
     row.isDirectory &&
     node.status === 'modified' &&
     node.left?.kind === 'directory' &&
     node.right?.kind === 'directory';
-  const leafStatus = differsInside ? 'identical' : node.status;
+  const leafStatus = hasDifferencesInside ? 'identical' : node.status;
 
   return (
     <div
@@ -107,13 +107,13 @@ function Cell({
           )}
           <EntryIcon info={info} open={row.expanded} />
           <span className="truncate">{node.name}</span>
-          {differsInside && (
+          {hasDifferencesInside && (
             <span
               className="size-2 shrink-0 rounded-full bg-modified-dot"
               title="Contains differences"
             />
           )}
-          {node.error && (
+          {node.error !== undefined && node.error !== '' && (
             <span className="truncate text-xs" title={node.error}>
               ({node.error})
             </span>
@@ -160,6 +160,10 @@ function ActionButton({
   );
 }
 
+function focusRow(row: Element | null): void {
+  if (row instanceof HTMLElement) row.focus();
+}
+
 /** Side-by-side comparison rows: left tree and right tree aligned on the same row list. */
 export function CompareTree({
   rows,
@@ -168,7 +172,7 @@ export function CompareTree({
   onOpen,
   onSelect,
   onCompareWithSelected,
-}: CompareTreeProps) {
+}: CompareTreeProps): JSX.Element {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>, row: TreeRow) => {
     const el = e.currentTarget;
     switch (e.key) {
@@ -182,10 +186,10 @@ export function CompareTree({
         if (row.isDirectory && row.expanded) onToggle(row.node);
         break;
       case 'ArrowDown':
-        (el.nextElementSibling as HTMLElement | null)?.focus();
+        focusRow(el.nextElementSibling);
         break;
       case 'ArrowUp':
-        (el.previousElementSibling as HTMLElement | null)?.focus();
+        focusRow(el.previousElementSibling);
         break;
       default:
         return;

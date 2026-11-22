@@ -4,7 +4,7 @@ import { afterAll, afterEach, beforeAll, beforeEach } from 'vitest';
 import { server } from './server.ts';
 
 /** jsdom has no matchMedia; default to a light-mode system preference. */
-export function stubMatchMedia(prefersDark = false) {
+export function stubMatchMedia(prefersDark = false): void {
   Object.defineProperty(window, 'matchMedia', {
     configurable: true,
     writable: true,

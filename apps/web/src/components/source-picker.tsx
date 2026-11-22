@@ -1,7 +1,7 @@
 import type { RepoInfo } from '@om/shared';
 import clsx from 'clsx';
 import { Download, Folder, GitBranch, LoaderCircle, RefreshCw } from 'lucide-react';
-import { useId, useState } from 'react';
+import { useId, useState, type JSX } from 'react';
 import { formatRelative } from '../lib/format.ts';
 import { useRepoActions } from '../lib/session.ts';
 import type { SourceDraft } from '../lib/source-draft.ts';
@@ -12,26 +12,33 @@ const field =
   'w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30';
 const small = 'mb-1 block text-xs font-medium text-muted';
 
-interface SourcePickerProps {
+type SourcePickerProps = {
   side: 'Base' | 'Target';
   value: SourceDraft;
   onChange: (value: SourceDraft) => void;
   repos: RepoInfo[];
   user: string;
   sessionId: string;
-}
+};
 
 /** Chooses one side of a comparison: a local folder, or a branch of a git repo in the session. */
-export function SourcePicker({ side, value, onChange, repos, user, sessionId }: SourcePickerProps) {
+export function SourcePicker({
+  side,
+  value,
+  onChange,
+  repos,
+  user,
+  sessionId,
+}: SourcePickerProps): JSX.Element {
   const id = useId();
   const lower = side.toLowerCase();
   const { add, fetchLatest } = useRepoActions(user, sessionId);
-  const [adding, setAdding] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
   const [url, setUrl] = useState('');
   const [lastPath, setLastPath] = useState(value.type === 'path' ? value.path : '');
 
   const repo = value.type === 'git' ? repos.find((r) => r.id === value.repoId) : undefined;
-  const showUrl = value.type === 'git' && (adding || repos.length === 0);
+  const shouldShowUrl = value.type === 'git' && (isAdding || repos.length === 0);
 
   const pickRepo = (r: RepoInfo) => {
     onChange({ type: 'git', repoId: r.id, branch: r.defaultBranch });
@@ -111,13 +118,13 @@ export function SourcePicker({ side, value, onChange, repos, user, sessionId }: 
               <select
                 id={`${id}-repo`}
                 className={field}
-                value={adding ? ADD : value.repoId}
+                value={isAdding ? ADD : value.repoId}
                 onChange={(e) => {
                   if (e.target.value === ADD) {
-                    setAdding(true);
+                    setIsAdding(true);
                     return;
                   }
-                  setAdding(false);
+                  setIsAdding(false);
                   const chosen = repos.find((r) => r.id === e.target.value);
                   if (chosen) pickRepo(chosen);
                 }}
@@ -135,7 +142,7 @@ export function SourcePicker({ side, value, onChange, repos, user, sessionId }: 
             </div>
           )}
 
-          {showUrl && (
+          {shouldShowUrl && (
             <div>
               <label htmlFor={`${id}-url`} className={small}>
                 {side} repository URL
@@ -156,7 +163,7 @@ export function SourcePicker({ side, value, onChange, repos, user, sessionId }: 
                         add.mutate(url.trim(), {
                           onSuccess: (r) => {
                             pickRepo(r);
-                            setAdding(false);
+                            setIsAdding(false);
                             setUrl('');
                           },
                         });
@@ -176,7 +183,7 @@ export function SourcePicker({ side, value, onChange, repos, user, sessionId }: 
                     add.mutate(url.trim(), {
                       onSuccess: (r) => {
                         pickRepo(r);
-                        setAdding(false);
+                        setIsAdding(false);
                         setUrl('');
                       },
                     });
@@ -194,7 +201,7 @@ export function SourcePicker({ side, value, onChange, repos, user, sessionId }: 
             </div>
           )}
 
-          {repo && !adding && (
+          {repo && !isAdding && (
             <div>
               <label htmlFor={`${id}-branch`} className={small}>
                 {side} branch

@@ -3,18 +3,18 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import {
-  addRepoRequestSchema,
-  createSessionRequestSchema,
-  directoryCompareRequestSchema,
-  fileCompareQuerySchema,
-  sessionIdSchema,
-  usernameSchema,
+  AddRepoRequestSchema,
+  CreateSessionRequestSchema,
+  DirectoryCompareRequestSchema,
+  FileCompareQuerySchema,
+  SessionIdSchema,
+  UsernameSchema,
   type DefaultsResponse,
   type FileCompareResult,
   type SessionDetail,
 } from '@om/shared';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
-import type { ZodError, ZodType } from 'zod';
+import { z, type ZodError, type ZodType } from 'zod';
 import { compareDirectories } from './compare/compare-directories.ts';
 import { filesEqual } from './compare/files-equal.ts';
 import { CompareInputError, ConflictError, NotFoundError } from './errors.ts';
@@ -23,7 +23,8 @@ import { GitService } from './git/git-service.ts';
 import { RepoManager, toInfo } from './git/repo-manager.ts';
 import { Store } from './store/store.ts';
 
-export interface AppOptions {
+/** Options for {@link buildApp}. All are optional; tests rely on the defaults. */
+export type AppOptions = {
   /** Text files larger than this are not returned to the diff view. */
   maxTextFileBytes?: number;
   /** Directory with the built web app to serve (production). */
@@ -36,24 +37,44 @@ export interface AppOptions {
   dataDir?: string;
   /** URL schemes allowed for cloning (default: https, ssh). */
   allowedProtocols?: string[];
+};
+
+/** Route parameters, validated like any other input. */
+const UserParamsSchema = z.object({ user: UsernameSchema });
+const SessionParamsSchema = z.object({ user: UsernameSchema, sessionId: SessionIdSchema });
+const RepoParamsSchema = SessionParamsSchema.extend({ repoId: z.string().min(1) });
+
+/** HTTP status carried by Fastify's own errors (e.g. 415 for a bad content type), else 500. */
+function statusCodeOf(error: unknown): number {
+  return typeof error === 'object' &&
+    error !== null &&
+    'statusCode' in error &&
+    typeof error.statusCode === 'number'
+    ? error.statusCode
+    : 500;
 }
 
-const zodMessage = (err: ZodError) =>
+const zodMessage = (err: ZodError): string =>
   err.issues
     .map((i) => (i.path.length ? `${i.path.join('.')}: ${i.message}` : i.message))
     .join('; ');
 
+/**
+ * Builds the Fastify app with every API route and the error mapping
+ * (CompareInputError → 400, NotFoundError → 404, ConflictError → 409).
+ * Does not listen; call `listen` (server) or `inject` (tests) on the result.
+ */
 export function buildApp(options: AppOptions = {}): FastifyInstance {
   const {
     maxTextFileBytes = 5 * 1024 * 1024,
     staticDir,
-    logger = false,
+    logger: isLogging = false,
     defaultLeft,
     defaultRight,
     dataDir = path.join(tmpdir(), `om-data-${crypto.randomUUID()}`),
     allowedProtocols,
   } = options;
-  const app = Fastify({ logger });
+  const app = Fastify({ logger: isLogging });
 
   mkdirSync(dataDir, { recursive: true });
   const store = new Store(path.join(dataDir, 'om.db'));
@@ -73,17 +94,12 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     return parsed.data;
   };
 
-  const sessionParams = (request: FastifyRequest) => {
-    const params = request.params as { user?: string; sessionId?: string };
-    return {
-      user: parse(usernameSchema, params.user),
-      sessionId: parse(sessionIdSchema, params.sessionId),
-    };
-  };
+  const sessionParams = (request: FastifyRequest): z.infer<typeof SessionParamsSchema> =>
+    parse(SessionParamsSchema, request.params);
 
   const sessionDetail = (user: string, sessionId: string): SessionDetail => {
     const session = store.getSession(user, sessionId);
-    if (!session) throw new NotFoundError(`Session not found: ${sessionId}`);
+    if (session === undefined) throw new NotFoundError(`Session not found: ${sessionId}`);
     return {
       user,
       session,
@@ -97,28 +113,24 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     if (err instanceof NotFoundError) return reply.status(404).send({ message: err.message });
     if (err instanceof ConflictError) return reply.status(409).send({ message: err.message });
     request.log.error(err);
-    const statusCode =
-      typeof (err as { statusCode?: unknown }).statusCode === 'number'
-        ? (err as { statusCode: number }).statusCode
-        : 500;
     return reply
-      .status(statusCode)
+      .status(statusCodeOf(err))
       .send({ message: err instanceof Error ? err.message : 'Internal error' });
   });
 
   app.get('/api/defaults', (): DefaultsResponse => ({
-    ...(defaultLeft ? { left: defaultLeft } : {}),
-    ...(defaultRight ? { right: defaultRight } : {}),
+    ...(defaultLeft !== undefined && defaultLeft !== '' ? { left: defaultLeft } : {}),
+    ...(defaultRight !== undefined && defaultRight !== '' ? { right: defaultRight } : {}),
   }));
 
   app.get('/api/users/:user/sessions', (request) => {
-    const user = parse(usernameSchema, (request.params as { user?: string }).user);
+    const { user } = parse(UserParamsSchema, request.params);
     return store.listSessions(user);
   });
 
   app.post('/api/users/:user/sessions', (request, reply) => {
-    const user = parse(usernameSchema, (request.params as { user?: string }).user);
-    const { name } = parse(createSessionRequestSchema, request.body);
+    const { user } = parse(UserParamsSchema, request.params);
+    const { name } = parse(CreateSessionRequestSchema, request.body);
     return reply.status(201).send(store.createSession(user, name));
   });
 
@@ -132,24 +144,23 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     if (!(await repos.deleteSession(user, sessionId))) {
       throw new NotFoundError(`Session not found: ${sessionId}`);
     }
-    return reply.status(204).send();
+    return await reply.status(204).send();
   });
 
   app.post('/api/users/:user/sessions/:sessionId/repos', async (request, reply) => {
     const { user, sessionId } = sessionParams(request);
-    const { url } = parse(addRepoRequestSchema, request.body);
-    const { repo, created } = await repos.addRepo(user, sessionId, url);
-    return reply.status(created ? 201 : 200).send(repo);
+    const { url } = parse(AddRepoRequestSchema, request.body);
+    const { repo, created: isCreated } = await repos.addRepo(user, sessionId, url);
+    return await reply.status(isCreated ? 201 : 200).send(repo);
   });
 
   app.post('/api/users/:user/sessions/:sessionId/repos/:repoId/fetch', (request) => {
-    const { user, sessionId } = sessionParams(request);
-    const { repoId } = request.params as { repoId: string };
+    const { user, sessionId, repoId } = parse(RepoParamsSchema, request.params);
     return repos.fetchRepo(user, sessionId, repoId);
   });
 
   app.post('/api/compare/directories', async (request) => {
-    const { left, right, user, sessionId } = parse(directoryCompareRequestSchema, request.body);
+    const { left, right, user, sessionId } = parse(DirectoryCompareRequestSchema, request.body);
     const [l, r] = await Promise.all([
       repos.resolve(left, user, sessionId),
       repos.resolve(right, user, sessionId),
@@ -159,15 +170,21 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
       rightLabel: r.label,
       ignoreAtRoot: { left: l.ignore, right: r.ignore },
     });
-    if (user && sessionId && store.getSession(user, sessionId)) {
+    if (
+      user !== undefined &&
+      user !== '' &&
+      sessionId !== undefined &&
+      sessionId !== '' &&
+      store.getSession(user, sessionId) !== undefined
+    ) {
       store.recordComparison(sessionId, { left, right, leftLabel: l.label, rightLabel: r.label });
     }
     return result;
   });
 
   app.get('/api/compare/files', async (request, reply) => {
-    const parsed = fileCompareQuerySchema.safeParse(request.query);
-    if (!parsed.success) return reply.status(400).send({ message: zodMessage(parsed.error) });
+    const parsed = FileCompareQuerySchema.safeParse(request.query);
+    if (!parsed.success) return await reply.status(400).send({ message: zodMessage(parsed.error) });
     const { left, right } = parsed.data;
 
     const [l, r] = await Promise.all([
@@ -182,7 +199,7 @@ export function buildApp(options: AppOptions = {}): FastifyInstance {
     return result;
   });
 
-  if (staticDir) {
+  if (staticDir !== undefined && staticDir !== '') {
     void app.register(fastifyStatic, { root: staticDir });
     // Client-side routing: unknown non-API GETs get the SPA entry point.
     app.setNotFoundHandler((request, reply) => {

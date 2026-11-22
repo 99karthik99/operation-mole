@@ -6,14 +6,16 @@ import { CompareInputError, NotFoundError } from '../errors.ts';
 import type { RepoRecord, Store } from '../store/store.ts';
 import { GitService } from './git-service.ts';
 
-export interface ResolvedSource {
+/** A comparison side turned into a folder on disk (see {@link RepoManager.resolve}). */
+export type ResolvedSource = {
   /** Folder to compare. */
   root: string;
   label: string;
   /** Names to skip at the top level (a checkout's `.git`). */
   ignore: string[];
-}
+};
 
+/** The API view of a stored repo (drops the owning session id). */
 export const toInfo = (r: RepoRecord): RepoInfo => ({
   id: r.id,
   url: r.url,
@@ -94,7 +96,7 @@ export class RepoManager {
     const url = normalizeUrl(rawUrl);
     this.#git.validateUrl(url);
 
-    return this.#exclusive(`${sessionId}:${url}`, async () => {
+    return await this.#exclusive(`${sessionId}:${url}`, async () => {
       const existing = this.#store.findRepoByUrl(sessionId, url);
       if (existing && existsSync(this.#repoDir(user, sessionId, existing.id))) {
         return { repo: toInfo(existing), created: false };
@@ -120,7 +122,7 @@ export class RepoManager {
   async fetchRepo(user: string, sessionId: string, repoId: string): Promise<RepoInfo> {
     this.#requireSession(user, sessionId);
     const repo = this.#requireRepo(sessionId, repoId);
-    return this.#exclusive(`${sessionId}:${repo.url}`, async () => {
+    return await this.#exclusive(`${sessionId}:${repo.url}`, async () => {
       const { defaultBranch, branches } = await this.#git.fetch(
         this.#repoDir(user, sessionId, repoId),
       );
@@ -131,7 +133,7 @@ export class RepoManager {
   /** Turns a source into a folder to compare, checking out the branch if needed. */
   async resolve(source: Source, user?: string, sessionId?: string): Promise<ResolvedSource> {
     if (source.type === 'path') return { root: source.path, label: source.path, ignore: [] };
-    if (!user || !sessionId) {
+    if (user === undefined || user === '' || sessionId === undefined || sessionId === '') {
       throw new CompareInputError('Comparing a git branch needs a session');
     }
     this.#requireSession(user, sessionId);
@@ -147,8 +149,8 @@ export class RepoManager {
   }
 
   async deleteSession(user: string, sessionId: string): Promise<boolean> {
-    const deleted = this.#store.deleteSession(user, sessionId);
-    if (deleted) await rm(this.sessionDir(user, sessionId), { recursive: true, force: true });
-    return deleted;
+    const isDeleted = this.#store.deleteSession(user, sessionId);
+    if (isDeleted) await rm(this.sessionDir(user, sessionId), { recursive: true, force: true });
+    return isDeleted;
   }
 }

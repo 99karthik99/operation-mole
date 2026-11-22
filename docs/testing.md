@@ -1,12 +1,12 @@
 # Testing
 
-OM is built **test-first**: write or extend a test, watch it fail for the right reason, then implement. `npm run check` (type check, lint, format check and all tests) must pass before a change is done.
+OM is built **test-first**: write or extend a test, watch it fail for the right reason, then implement. `pnpm check` (type check, lint, format check and all tests) must pass before a change is done.
 
 ```bash
-npm test                                                    # everything
-npx vitest run --project server                             # one project: shared | server | web
-npx vitest run --project web src/pages/SessionsPage.test.tsx # one file
-npm run test:watch                                          # watch mode
+pnpm test                                                    # everything
+pnpm vitest run --project server                             # one project: shared | server | web
+pnpm vitest run --project web src/pages/sessions-page.test.tsx # one file
+pnpm test:watch                                          # watch mode
 ```
 
 Vitest runs three projects, set up in the root `vitest.config.ts`:
@@ -34,14 +34,26 @@ There are no mocks of the filesystem or git, because the edge cases are in how r
 
 Tests that need `file://` clones create the app with `allowedProtocols: ['https', 'ssh', 'file']`.
 
+### Any OS
+
+The suite must pass on Linux, macOS and Windows. Don't branch on `process.platform`; probe the capability instead (`test/capabilities.ts`), and use `it.runIf(...)` with a comment saying where it's missing:
+
+| Probe                    | False when                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------ |
+| `canCreateSymlinks`      | Windows without Developer Mode or admin rights                                                   |
+| `canMakeFilesUnreadable` | Windows (`chmod` doesn't block reads), or running as root                                        |
+| `hasExampleSymlinks`     | git checked `examples/` out with `core.symlinks=false` (the Windows default): links become files |
+
+Prefer keeping a test running everywhere and only adding the platform-dependent part when the probe allows it (see the sort-order test). Build paths with `path.join`, never `'/'`. Server tests get a 30s timeout because spawning git is much slower on Windows.
+
 ## Web tests: the whole app, a mocked API
 
 - **`renderApp(url)`** (`src/test/render.tsx`) renders the **real routes** in a memory router with a fresh query client. It returns `location()` and `search()` so tests can check the URL.
 - **MSW** (`src/test/server.ts`, `src/test/setup.ts`) mocks the API. Unhandled requests **fail** the test (`onUnhandledFrame: 'error'`), so every request the page makes needs a handler, including the session `GET` the header makes. `src/test/handlers.ts` has shared fixtures (`sessionSummary`, `repoInfo`, `sessionDetailHandler`).
 - **Setup:** `matchMedia` is stubbed (light by default; use `stubMatchMedia(true)` for dark), and `localStorage` and `data-theme` are reset before each test.
-- **Monaco** can't run in jsdom. `FileComparePage.test.tsx` swaps `DiffView` for a stub, and `DiffView.test.tsx` checks the options it passes to `DiffEditor`.
+- **Monaco** can't run in jsdom. `file-compare-page.test.tsx` swaps `DiffView` for a stub, and `diff-view.test.tsx` checks the options it passes to `DiffEditor`.
 - **Queries:** prefer role, label and text queries (`getByRole('treeitem', { name })`, `getByLabelText('Base branch')`). They double as accessibility checks.
 
 ## In the browser
 
-`.claude/launch.json` defines `dev` (`npm run dev` on port 5180) for the browser preview. Check visual and interaction changes there, in both themes and at a narrow width. Use a throwaway username, and delete its session afterwards so its clones are removed.
+`.claude/launch.json` defines `dev` (`pnpm dev` on port 5180) for the browser preview. Check visual and interaction changes there, in both themes and at a narrow width. Use a throwaway username, and delete its session afterwards so its clones are removed.

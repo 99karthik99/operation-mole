@@ -1,6 +1,6 @@
 # Architecture
 
-OM is a small monorepo (npm workspaces) with a TypeScript API, a React single-page app, and a shared package of types and validation.
+OM is a small monorepo (pnpm workspace) with a TypeScript API, a React single-page app, and a shared package of types and validation.
 
 ```
 ┌────────────── Browser ───────────────┐        ┌──────────────────── apps/server (Fastify) ────────────────────┐
@@ -17,17 +17,17 @@ OM is a small monorepo (npm workspaces) with a TypeScript API, a React single-pa
 
 ## Packages
 
-| Package           | Role                                                                                             |
-| ----------------- | ------------------------------------------------------------------------------------------------ |
-| `packages/shared` | `api.ts` (response types) and `schemas.ts` (zod request schemas). Exported as TypeScript source. |
-| `apps/server`     | Fastify API. Node runs the `.ts` files directly (type stripping), so there's no build step.      |
-| `apps/web`        | React app built with Vite. In development, Vite proxies `/api` to the API server.                |
+| Package           | Role                                                                                                                                                                                              |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/shared` | `api.ts` (response types), `schemas.ts` (zod request schemas) and `response-schemas.ts` (zod response schemas, used by the web client to validate every response). Exported as TypeScript source. |
+| `apps/server`     | Fastify API. Node runs the `.ts` files directly (type stripping), so there's no build step. Settings come from `config/server-config.ts`, which validates the environment (see `.env.example`).   |
+| `apps/web`        | React app built with Vite. In development, Vite proxies `/api` to the API server.                                                                                                                 |
 
 ## Request flows
 
 ### Compare two sources (`POST /api/compare/directories`)
 
-1. The body is validated by `directoryCompareRequestSchema`. A bare absolute path is shorthand for `{type: 'path', path}`.
+1. The body is validated by `DirectoryCompareRequestSchema`. A bare absolute path is shorthand for `{type: 'path', path}`.
 2. Each side is resolved by `RepoManager.resolve`:
    - **path:** the folder itself.
    - **git:**

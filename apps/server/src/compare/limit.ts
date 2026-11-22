@@ -1,7 +1,7 @@
 /** Returns a function that runs async tasks with at most `concurrency` in flight. */
 export function createLimiter(concurrency: number) {
   let active = 0;
-  const queue: (() => void)[] = [];
+  const queue: Array<() => void> = [];
 
   const next = () => {
     active--;

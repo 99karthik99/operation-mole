@@ -1,15 +1,16 @@
 import type { SessionSummary } from '@om/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderGit2, LogOut, Plus, Trash2 } from 'lucide-react';
-import { useId, useState, type SubmitEvent } from 'react';
+import { useId, useState, type JSX, type SubmitEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { createSession, deleteSession, listSessions } from '../lib/api.ts';
 import { formatRelative } from '../lib/format.ts';
 import { sessionPath } from '../lib/urls.ts';
 import { clearStoredUser } from '../lib/user.ts';
 
-export function SessionsPage() {
-  const user = useParams().user ?? '';
+/** Lists, creates and deletes the user's sessions. */
+export function SessionsPage(): JSX.Element {
+  const user = useParams()['user'] ?? '';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');

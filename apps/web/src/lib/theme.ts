@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from 'react';
 
+/** Color scheme of the app. */
 export type Theme = 'light' | 'dark';
 
 const STORAGE_KEY = 'om-theme';
@@ -20,16 +21,15 @@ export function getTheme(): Theme {
   return saved() ?? (window.matchMedia(DARK_QUERY).matches ? 'dark' : 'light');
 }
 
+/** Applies a theme (via `data-theme` on `<html>`), remembers it, and notifies {@link useTheme}. */
 export function setTheme(theme: Theme): void {
-  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset['theme'] = theme;
   try {
     localStorage.setItem(STORAGE_KEY, theme);
   } catch {
     // Storage unavailable (e.g. private mode): the choice lasts for this page only.
   }
-  listeners.forEach((notify) => {
-    notify();
-  });
+  for (const notify of listeners) notify();
 }
 
 function subscribe(onChange: () => void) {

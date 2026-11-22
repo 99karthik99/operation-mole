@@ -9,7 +9,7 @@ You review changes in the OM (Operation Mole) repo. Read `CLAUDE.md` first; it i
 ## What to do
 
 1. Find the change: `git diff` and `git status` if this is a git repo; otherwise review the files named in your task.
-2. Run `npm run check` and report the result exactly (pass, or the failing output).
+2. Run `pnpm check` and report the result exactly (pass, or the failing output).
 3. Check the change against the list below. Report only real problems, each with a `file:line` and a concrete fix. Say plainly if nothing is wrong.
 
 ## Checklist

@@ -25,20 +25,26 @@ Notes:
 - **Manual freshness:** nothing fetches on its own. Users click **Fetch latest** (in the Folders picker or the session overview).
 - **`.git` is hidden:** a worktree has a `.git` file at its root. It's skipped when comparing git sources, so it never shows as a difference.
 
+## The server's own git config
+
+OM runs the server machine's git with that machine's configuration, on Linux, macOS and Windows alike: `~/.gitconfig` (or `%USERPROFILE%\.gitconfig`), `$XDG_CONFIG_HOME/git/config`, the system config, credential helpers (including Git Credential Manager, which needs `APPDATA`/`LOCALAPPDATA`) and SSH keys. The inherited variables cover what each OS needs to find these. Windows git also needs `SystemRoot` to open network sockets.
+
+Setting `GIT_SSH_COMMAND` would override `core.sshCommand`, so at startup `configuredSshCommand()` reads it (outside any repo, so only system/global config apply), and OM uses it with `-o BatchMode=yes` appended.
+
 ## Locking
 
 `RepoManager` runs at most one git operation at a time per `(session, repo URL)`: clone, fetch or checkout. Two quick compares or a fetch during a checkout therefore can't corrupt a repo. Different repos and sessions run in parallel.
 
 ## Security
 
-| Risk                                                     | Mitigation                                                                                                                                                                          |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Local files or dangerous transports (`file://`, `ext::`) | `validateUrl` accepts only `https://`, `ssh://` and `user@host:path`. `GIT_ALLOW_PROTOCOL` also restricts what git itself may use, including submodules.                            |
-| Option injection (`--upload-pack=…`)                     | URLs starting with `-` or containing whitespace are rejected. URLs are passed as arguments, never through a shell.                                                                  |
-| Hanging on a password or host-key prompt                 | `GIT_TERMINAL_PROMPT=0`, and `GIT_SSH_COMMAND=ssh -o BatchMode=yes` unless one is already set.                                                                                      |
-| Inherited git environment changing behavior              | Only `PATH`, `HOME`, `USER`, `LOGNAME`, `LANG`, `LC_ALL`, `TMPDIR`, `SSH_AUTH_SOCK` and proxy variables are passed on. simple-git also rejects unexpected ones (e.g. `GIT_EDITOR`). |
-| Path traversal through names                             | Folders on disk use generated ids. Usernames are a strict slug. Branches are checked against `refs/heads/` and URL-encoded for folder names.                                        |
-| Using another user's repo                                | Every git source is checked against the requesting user's session and that session's repos (404 otherwise).                                                                         |
+| Risk                                                     | Mitigation                                                                                                                                                                                      |
+| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Local files or dangerous transports (`file://`, `ext::`) | `validateUrl` accepts only `https://`, `ssh://` and `user@host:path`. `GIT_ALLOW_PROTOCOL` also restricts what git itself may use, including submodules.                                        |
+| Option injection (`--upload-pack=…`)                     | URLs starting with `-` or containing whitespace are rejected. URLs are passed as arguments, never through a shell.                                                                              |
+| Hanging on a password or host-key prompt                 | `GIT_TERMINAL_PROMPT=0`, and `GIT_SSH_COMMAND` = the server's `core.sshCommand` (or `ssh`) plus `-o BatchMode=yes`, unless `GIT_SSH_COMMAND` is already set.                                    |
+| Inherited git environment changing behavior              | Only an allowlist is passed on (`INHERITED_ENV` in `git-service.ts`): tools, home/config locations, temp dirs, SSH agent, proxies. simple-git also rejects unexpected ones (e.g. `GIT_EDITOR`). |
+| Path traversal through names                             | Folders on disk use generated ids. Usernames are a strict slug. Branches are checked against `refs/heads/` and URL-encoded for folder names.                                                    |
+| Using another user's repo                                | Every git source is checked against the requesting user's session and that session's repos (404 otherwise).                                                                                     |
 
 Tests enable `file://` with `allowedProtocols: ['https', 'ssh', 'file']` so they can clone local repos. The app never enables it.
 
