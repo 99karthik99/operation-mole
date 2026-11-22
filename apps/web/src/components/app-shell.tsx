@@ -1,17 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { ChevronRight, FileDiff, FlaskConical, FolderTree, LayoutDashboard } from 'lucide-react';
+import type { JSX } from 'react';
 import { Link, NavLink, Outlet, useMatch } from 'react-router';
 import { getSession } from '../lib/api.ts';
 import { sessionPath } from '../lib/urls.ts';
-import { Logo } from './Logo.tsx';
-import { ThemeToggle } from './ThemeToggle.tsx';
+import { Logo } from './logo.tsx';
+import { ThemeToggle } from './theme-toggle.tsx';
 
-export function AppShell() {
+/** Page frame: header with logo, user/session breadcrumb, session navigation and theme toggle. */
+export function AppShell(): JSX.Element {
   const userMatch = useMatch('/u/:user/*');
   const sessionMatch = useMatch('/u/:user/s/:sessionId/*');
-  const user = userMatch?.params.user;
-  const sessionId = sessionMatch?.params.sessionId;
+  const user = nonEmpty(userMatch?.params.user);
+  const sessionId = nonEmpty(sessionMatch?.params.sessionId);
 
   return (
     <div className="flex h-dvh flex-col bg-canvas text-ink">
@@ -20,7 +22,7 @@ export function AppShell() {
           <Logo className="size-7" />
           <span>OM</span>
         </Link>
-        {user && (
+        {user !== undefined && (
           <nav aria-label="Context" className="flex min-w-0 shrink items-center gap-1 text-sm">
             <Link
               to={`/u/${encodeURIComponent(user)}`}
@@ -28,7 +30,7 @@ export function AppShell() {
             >
               {user}
             </Link>
-            {sessionId && (
+            {sessionId !== undefined && (
               <>
                 <ChevronRight className="size-3.5 text-muted" aria-hidden />
                 <SessionName user={user} sessionId={sessionId} />
@@ -36,7 +38,9 @@ export function AppShell() {
             )}
           </nav>
         )}
-        {user && sessionId && <SessionNav user={user} sessionId={sessionId} />}
+        {user !== undefined && sessionId !== undefined && (
+          <SessionNav user={user} sessionId={sessionId} />
+        )}
         <div className="ml-auto">
           <ThemeToggle />
         </div>
@@ -46,6 +50,11 @@ export function AppShell() {
       </main>
     </div>
   );
+}
+
+/** A route param, or undefined when it is missing or empty. */
+function nonEmpty(param: string | undefined): string | undefined {
+  return param === '' ? undefined : param;
 }
 
 function SessionName({ user, sessionId }: { user: string; sessionId: string }) {

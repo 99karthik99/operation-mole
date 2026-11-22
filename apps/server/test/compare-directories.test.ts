@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { CompareNode } from '@om/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CompareInputError, compareDirectories } from '../src/compare/compare-directories.ts';
+import { canCreateSymlinks, canMakeFilesUnreadable } from './capabilities.ts';
 import { createWorkspace } from './fixtures.ts';
 
 let ws: Awaited<ReturnType<typeof createWorkspace>>;
@@ -140,7 +141,8 @@ describe('compareDirectories', () => {
     expect(summary).toEqual({ identical: 0, modified: 0, onlyLeft: 2, onlyRight: 2, errors: 0 });
   });
 
-  it('compares symlinks by target without following them', async () => {
+  // Windows needs Developer Mode (or admin) to create symlinks.
+  it.runIf(canCreateSymlinks)('compares symlinks by target without following them', async () => {
     const { left, right } = await ws.pair(
       { dir: { 'f.txt': 'f' }, same: { symlink: 'dir' }, other: { symlink: 'dir' } },
       { dir: { 'f.txt': 'f' }, same: { symlink: 'dir' }, other: { symlink: 'elsewhere' } },
@@ -171,7 +173,8 @@ describe('compareDirectories', () => {
       Zeta: {},
       dir2: {},
       alpha: {},
-      link: { symlink: 'alpha' },
+      // A symlink to a folder still sorts with the files (when the OS lets us create one).
+      ...(canCreateSymlinks ? { link: { symlink: 'alpha' } } : {}),
     };
     const { left, right } = await ws.pair(spec, { ...spec, beta: {}, 'c.txt': '' });
     const { root } = await compareDirectories(left, right);
@@ -185,7 +188,7 @@ describe('compareDirectories', () => {
       'c.txt',
       'file2.txt',
       'file10.txt',
-      'link',
+      ...(canCreateSymlinks ? ['link'] : []),
       'README.md',
     ]);
   });
@@ -198,7 +201,8 @@ describe('compareDirectories', () => {
     expect(find(root, 'a/b/c.txt').path).toBe('a/b/c.txt');
   });
 
-  it.skipIf(process.getuid?.() === 0)('reports unreadable files as errors', async () => {
+  // chmod can't make a file unreadable on Windows, nor for root.
+  it.runIf(canMakeFilesUnreadable)('reports unreadable files as errors', async () => {
     const { left, right } = await ws.pair({ 'locked.txt': 'a' }, { 'locked.txt': 'a' });
     await chmod(path.join(left, 'locked.txt'), 0o000);
     try {

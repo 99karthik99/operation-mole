@@ -12,21 +12,26 @@ Guidance for Claude (and other coding agents) working in this repo. Read this fi
 ## Commands
 
 ```bash
-npm install          # once
-npm run dev          # API :5181 (node --watch) + web :5180 (Vite). Open http://localhost:5180
-npm run check        # typecheck + eslint + prettier --check + all tests. Must pass before you finish.
-npm test             # all Vitest projects (shared, server, web)
-npx vitest run --project server test/git-service.test.ts   # one file
-npm run build && npm start   # production: one server on :5181
+pnpm install               # once (pnpm only: never npm/yarn; CI uses --frozen-lockfile)
+pnpm dev                   # API :5181 (node --watch) + web :5180 (Vite). Open http://localhost:5180
+pnpm check                 # typecheck + eslint (0 warnings) + prettier --check + all tests. Must pass.
+pnpm test                  # all Vitest projects (shared, server, web)
+pnpm test:coverage         # tests + 80% line/branch thresholds
+pnpm vitest run --project server test/git-service.test.ts   # one file
+pnpm build && pnpm start   # production: one server on :5181
 ```
+
+Rules for all code are in [CONTRIBUTING.md](CONTRIBUTING.md) (TypeScript guidelines, plus OM's documented deviations). Read it before writing code.
 
 To check something in the browser, start `.claude/launch.json` → `dev` with the preview tool.
 
 ## Layout
 
 ```
-packages/shared   API types (api.ts) + zod schemas (schemas.ts). Exported as TS source, no build.
+packages/shared   API types (api.ts), request schemas (schemas.ts), response schemas (response-schemas.ts). TS source, no build.
 apps/server       Fastify. Node runs .ts directly (type stripping). No build step.
+  src/index.ts          entry: loads config, starts the server
+  src/config/           server-config.ts: env vars + flags, validated with zod (the only place env is read)
   src/app.ts            all routes + error mapping (CompareInputError→400, NotFound→404, Conflict→409)
   src/compare/          folder walk, byte comparison, sort order (sort.ts)
   src/git/              git-service.ts (clone/branches/worktree/fetch), repo-manager.ts (per-session dirs, locks)
@@ -34,7 +39,8 @@ apps/server       Fastify. Node runs .ts directly (type stripping). No build ste
   test/                 Vitest. Real temp folders and real git repos (git-fixtures.ts).
 apps/web          React 19 + Vite + Tailwind v4 + TanStack Query + React Router + Monaco
   src/routes.tsx        / → Welcome, /u/:user → Sessions, /u/:user/s/:sessionId[/folders|/files|/lab]
-  src/lib/              api client, sources (URL⇄Source), session hooks, tree, theme, format
+  src/components/, src/pages/   kebab-case files (app-shell.tsx), PascalCase components (AppShell)
+  src/lib/              api client (parses every response with the shared schemas), sources (URL⇄Source), session hooks, tree, theme, format
   src/test/             MSW server + handlers, renderApp(url) helper
 examples/         left/ (base) and right/ (target): sample data covering every case. Tested by examples.test.ts.
 docs/             architecture, API, data model, git, comparison rules, frontend, testing, decisions
@@ -46,13 +52,21 @@ docs/             architecture, API, data model, git, comparison rules, frontend
   - Server: `apps/server/test/*.test.ts`
   - Web: `*.test.tsx` next to the component or page, using `renderApp(url)` and MSW handlers
   - Example data: `examples.test.ts`
-- **Finish with `npm run check` passing.** For UI changes, also look at it in the browser preview.
-- **TypeScript is strict**, with `erasableSyntaxOnly`. That means:
+- **Finish with `pnpm check` passing.** For UI changes, also look at it in the browser preview.
+- **TypeScript is strict** (every flag in CONTRIBUTING.md §4, including `exactOptionalPropertyTypes` and `noPropertyAccessFromIndexSignature`), with `erasableSyntaxOnly`. That means:
   - no `enum`, no constructor parameter properties, no namespaces
   - relative imports use `.ts`/`.tsx` extensions
-  - no non-null assertions (`!`); use a guard instead
-  - eslint is `strictTypeChecked`
-- **TypeScript is pinned to ~6.0**, because typescript-eslint doesn't support 7 yet. Don't bump it until it does.
+  - no non-null assertions (`!`) and no `as` casts in production code; use a guard or parse with zod
+  - `type`, not `interface`; exported functions have explicit return types; booleans are `is/has/can/should/did/will…`
+  - files are kebab-case; zod schemas are PascalCase (`SourceSchema`)
+  - eslint is `strictTypeChecked` + `stylisticTypeChecked` + unicorn, with `--max-warnings=0`
+- **Untrusted input is parsed with zod:** request bodies and params (`app.ts`), env (`config/server-config.ts`), database rows (`store.ts`), and API responses in the web client (`response-schemas.ts`).
+- **TypeScript is pinned to exactly 6.0.3**, because typescript-eslint doesn't support 7 yet. Don't bump it until it does.
+- **Platform-agnostic:** code, package scripts, tests and docs must work on Linux, macOS and Windows.
+  - Build paths with `path.join`/`fileURLToPath`, never by concatenating `'/'`. Paths users type may be `/…`, `C:\…` or `\\server\share`.
+  - Package scripts run in cmd.exe on Windows: no `VAR=value cmd`, `rm -rf`, `&&`-chained shell tricks or globs. Use flags or a small `scripts/*.ts`.
+  - Tests probe capabilities (`apps/server/test/capabilities.ts`), never `process.platform`. See [docs/testing.md](docs/testing.md#any-os).
+  - Git runs with the server machine's own git config. Pass new env variables through the allowlist in `git-service.ts`; don't override user config (e.g. `core.sshCommand`).
 - **Use React 19 event types:** `SubmitEvent<HTMLFormElement>`, not the deprecated `FormEvent`.
 - **Libraries:** prefer well-known, stable ones. Adding a dependency is a deliberate choice; mention it.
 
@@ -79,10 +93,11 @@ docs/             architecture, API, data model, git, comparison rules, frontend
 
 - **Ports:** 5173 is used by another project on this machine. OM uses **5180** (web) and **5181** (API).
 - **`API_PORT`, not `PORT`:** the preview runner sets `PORT=5180`, so the API reads `API_PORT`. Don't switch it back.
-- **Never `pkill -f "node src/index.ts"`:** it also kills the dev API, which runs that file under `node --watch`. Stop only the PID you started.
+- **Never kill node by name** (`pkill -f "node src/index.ts"`, `taskkill /IM node.exe`): it also kills the dev API, which runs that file under `node --watch`. Stop only the PID you started.
+- **`pnpm start` passes `--production`**, not `NODE_ENV=production` (that syntax breaks on Windows).
 - **`examples/left` and `examples/right` must stay byte-exact.** They're excluded from Prettier and ESLint; never format them.
   - Some cases depend on exact bytes: CRLF, trailing spaces, zero-byte files, symlinks, `résumé.txt`.
-  - Git doesn't keep the empty folders `empty-both/` and `empty-in-base/`. `npm install` recreates them (`postinstall` → `scripts/ensure-example-dirs.mjs`); without them `examples.test.ts` fails.
+  - Git doesn't keep the empty folders `empty-both/` and `empty-in-base/`. `pnpm install` recreates them (`postinstall` → `scripts/ensure-example-dirs.ts`); without them `examples.test.ts` fails.
   - `.gitattributes` marks the example data `-text`, so git never changes its line endings.
 - **Monaco:**
   - It's bundled locally; the worker import is `monaco-editor/editor/editor.worker?worker` (0.57 exports map).

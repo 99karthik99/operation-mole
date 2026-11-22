@@ -1,5 +1,5 @@
 import type { RepoInfo, SessionDetail, SessionSummary } from '@om/shared';
-import { HttpResponse, http } from 'msw';
+import { HttpResponse, http, type HttpHandler } from 'msw';
 
 export const USER = 'karthik';
 
@@ -23,11 +23,11 @@ export const repoInfo = (overrides: Partial<RepoInfo> = {}): RepoInfo => ({
 });
 
 /** GET handler for one session's detail (header, overview, repo pickers). */
-export function sessionDetailHandler(detail: Partial<SessionDetail> = {}) {
+export function sessionDetailHandler(detail: Partial<SessionDetail> = {}): HttpHandler {
   return http.get('*/api/users/:user/sessions/:sessionId', ({ params }) =>
     HttpResponse.json<SessionDetail>({
-      user: String(params.user),
-      session: sessionSummary({ id: String(params.sessionId) }),
+      user: String(params['user']),
+      session: sessionSummary({ id: String(params['sessionId']) }),
       repos: [],
       recent: [],
       ...detail,

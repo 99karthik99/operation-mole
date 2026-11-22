@@ -1,7 +1,7 @@
 import { ArrowLeftRight } from 'lucide-react';
-import { useId, useState, type SubmitEvent } from 'react';
+import { useId, useState, type JSX, type SubmitEvent } from 'react';
 
-interface PathFormProps {
+type PathFormProps = {
   leftLabel: string;
   rightLabel: string;
   initialLeft: string;
@@ -9,7 +9,7 @@ interface PathFormProps {
   /** Allow submitting with only one side filled in. */
   allowOneSided?: boolean;
   onSubmit: (left: string, right: string) => void;
-}
+};
 
 /** Two absolute-path inputs with swap and compare buttons. Remount (via `key`) to reset from props. */
 export function PathForm({
@@ -19,7 +19,7 @@ export function PathForm({
   initialRight,
   allowOneSided = false,
   onSubmit,
-}: PathFormProps) {
+}: PathFormProps): JSX.Element {
   const [left, setLeft] = useState(initialLeft);
   const [right, setRight] = useState(initialRight);
   const id = useId();

@@ -3,5 +3,8 @@ dist/
 coverage/
 *.tsbuildinfo
 .DS_Store
+Thumbs.db
+desktop.ini
+.playwright-mcp/
 .vite/
 .data/

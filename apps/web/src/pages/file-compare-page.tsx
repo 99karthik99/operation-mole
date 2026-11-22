@@ -2,23 +2,24 @@ import type { FileCompareResult, FileContent } from '@om/shared';
 import { useQuery } from '@tanstack/react-query';
 import clsx from 'clsx';
 import { ArrowLeft, CheckCircle2, Columns2, Rows2 } from 'lucide-react';
-import { Suspense, lazy, useState } from 'react';
+import { Suspense, lazy, useState, type JSX } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { PathForm } from '../components/PathForm.tsx';
+import { PathForm } from '../components/path-form.tsx';
 import { compareFiles } from '../lib/api.ts';
 import { formatBytes } from '../lib/format.ts';
 import { languageForPath } from '../lib/language.ts';
 
 const DiffView = lazy(() =>
-  import('../components/DiffView.tsx').then((m) => ({ default: m.DiffView })),
+  import('../components/diff-view.tsx').then((m) => ({ default: m.DiffView })),
 );
 
 /** Only allow in-app back links, never arbitrary URLs from the query string. */
 function safeFrom(from: string | null): string | undefined {
-  return from?.startsWith('/u/') ? from : undefined;
+  return from?.startsWith('/u/') === true ? from : undefined;
 }
 
-export function FileComparePage() {
+/** Files: Monaco diff of the `left`/`right` files in the URL, with a link back to `from`. */
+export function FileComparePage(): JSX.Element {
   const [params, setParams] = useSearchParams();
   const left = params.get('left') ?? '';
   const right = params.get('right') ?? '';
@@ -27,7 +28,7 @@ export function FileComparePage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="space-y-2 border-b border-line bg-surface px-4 py-3">
-        {from && (
+        {from !== undefined && (
           <Link
             to={from}
             className="inline-flex items-center gap-1 text-sm text-accent hover:underline"
@@ -47,7 +48,7 @@ export function FileComparePage() {
             const next = new URLSearchParams();
             if (l) next.set('left', l);
             if (r) next.set('right', r);
-            if (from) next.set('from', from);
+            if (from !== undefined) next.set('from', from);
             setParams(next);
           }}
         />
@@ -64,15 +65,15 @@ export function FileComparePage() {
 }
 
 function statusText(result: FileCompareResult): string {
-  const binary = Boolean(result.left?.binary || result.right?.binary);
+  const isBinary = result.left?.binary === true || result.right?.binary === true;
   if (!result.left) return 'This file only exists in the target';
   if (!result.right) return 'This file only exists in the base';
-  if (result.identical) return binary ? 'Binary files are identical' : 'Files are identical';
-  return binary ? 'Binary files differ' : 'Files differ';
+  if (result.identical) return isBinary ? 'Binary files are identical' : 'Files are identical';
+  return isBinary ? 'Binary files differ' : 'Files differ';
 }
 
 function FileComparison({ left, right }: { left: string | undefined; right: string | undefined }) {
-  const [sideBySide, setSideBySide] = useState(true);
+  const [isSideBySide, setIsSideBySide] = useState(true);
   const query = useQuery({
     queryKey: ['compare-files', left, right],
     queryFn: () => compareFiles(left, right),
@@ -93,7 +94,7 @@ function FileComparison({ left, right }: { left: string | undefined; right: stri
 
   const result = query.data;
   const sides = [result.left, result.right].filter((s) => s !== undefined);
-  const showText = sides.every((s) => !s.binary && !s.tooLarge);
+  const shouldShowText = sides.every((s) => !s.binary && s.tooLarge !== true);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -113,30 +114,30 @@ function FileComparison({ left, right }: { left: string | undefined; right: stri
           {result.identical && <CheckCircle2 className="size-4" aria-hidden />}
           {statusText(result)}
         </span>
-        {showText && (
+        {shouldShowText && (
           <div className="ml-auto flex overflow-hidden rounded-md border border-line">
             <button
               type="button"
-              aria-pressed={sideBySide}
+              aria-pressed={isSideBySide}
               className={clsx(
                 'flex items-center gap-1 px-2 py-0.5',
-                sideBySide ? 'bg-accent-soft text-accent' : 'hover:bg-hover',
+                isSideBySide ? 'bg-accent-soft text-accent' : 'hover:bg-hover',
               )}
               onClick={() => {
-                setSideBySide(true);
+                setIsSideBySide(true);
               }}
             >
               <Columns2 className="size-3.5" aria-hidden /> Side by side
             </button>
             <button
               type="button"
-              aria-pressed={!sideBySide}
+              aria-pressed={!isSideBySide}
               className={clsx(
                 'flex items-center gap-1 px-2 py-0.5',
-                !sideBySide ? 'bg-accent-soft text-accent' : 'hover:bg-hover',
+                !isSideBySide ? 'bg-accent-soft text-accent' : 'hover:bg-hover',
               )}
               onClick={() => {
-                setSideBySide(false);
+                setIsSideBySide(false);
               }}
             >
               <Rows2 className="size-3.5" aria-hidden /> Inline
@@ -144,14 +145,14 @@ function FileComparison({ left, right }: { left: string | undefined; right: stri
           </div>
         )}
       </div>
-      {showText ? (
+      {shouldShowText ? (
         <div className="min-h-0 flex-1">
           <Suspense fallback={<p className="p-8 text-muted">Loading editor…</p>}>
             <DiffView
               original={result.left?.content ?? ''}
               modified={result.right?.content ?? ''}
               language={languageForPath((result.right ?? result.left)?.path ?? '')}
-              sideBySide={sideBySide}
+              sideBySide={isSideBySide}
             />
           </Suspense>
         </div>
@@ -169,10 +170,10 @@ function FileSummary({
   left: FileContent | undefined;
   right: FileContent | undefined;
 }) {
-  const tooLarge = Boolean(left?.tooLarge || right?.tooLarge);
+  const isTooLarge = left?.tooLarge === true || right?.tooLarge === true;
   return (
     <div className="p-4">
-      {tooLarge && (
+      {isTooLarge && (
         <p className="mb-3 text-sm text-muted">
           One or both files are too large to display as text.
         </p>

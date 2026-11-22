@@ -45,8 +45,8 @@ const BY_EXTENSION: Record<string, string> = {
 
 /** Monaco language id for a file path, based on its extension. */
 export function languageForPath(path: string): string {
-  const name = path.split('/').pop()?.toLowerCase() ?? '';
+  const name = path.split(/[\\/]/).pop()?.toLowerCase() ?? '';
   if (name === 'dockerfile') return 'dockerfile';
   const ext = name.includes('.') ? name.split('.').pop() : undefined;
-  return (ext && BY_EXTENSION[ext]) ?? 'plaintext';
+  return (ext === undefined ? undefined : BY_EXTENSION[ext]) ?? 'plaintext';
 }

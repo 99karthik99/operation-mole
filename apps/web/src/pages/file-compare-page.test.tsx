@@ -8,7 +8,7 @@ import { renderApp } from '../test/render.tsx';
 import { server } from '../test/server.ts';
 
 // Monaco needs a real browser; replace it with a stub that exposes its inputs.
-vi.mock('../components/DiffView.tsx', () => ({
+vi.mock('../components/diff-view.tsx', () => ({
   DiffView: (props: { original: string; modified: string; language: string }) => (
     <div data-testid="diff-view" data-language={props.language}>
       <pre data-testid="original">{props.original}</pre>
@@ -58,7 +58,7 @@ beforeEach(() => {
       const l = left === undefined ? undefined : files[left];
       const r = right === undefined ? undefined : files[right];
       const body: FileCompareResult = {
-        identical: l !== undefined && r !== undefined && l.sha256 === r.sha256,
+        identical: l !== undefined && r !== undefined ? l.sha256 === r.sha256 : false,
         ...(l ? { left: l } : {}),
         ...(r ? { right: r } : {}),
       };

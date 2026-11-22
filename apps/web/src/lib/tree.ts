@@ -3,15 +3,18 @@ import type { CompareNode, CompareStatus } from '@om/shared';
 /** Which entries the tree shows. A status shows entries with that status (and folders containing them). */
 export type TreeFilter = 'all' | 'differences' | CompareStatus;
 
-export interface TreeRow {
+/** One visible row of the comparison tree, as produced by {@link flattenTree}. */
+export type TreeRow = {
   node: CompareNode;
   depth: number;
   isDirectory: boolean;
   expanded: boolean;
-}
+};
 
+/** Whether a node is a folder (on at least one side): folders have `children`. */
 export const isDirectory = (node: CompareNode): boolean => node.children !== undefined;
 
+/** The node at a relative path, preferring the folder when a file and a folder share a name. */
 export function findNode(root: CompareNode, path: string): CompareNode | undefined {
   if (path === '') return root;
   let node: CompareNode | undefined = root;
@@ -50,9 +53,9 @@ export function flattenTree(
   const walk = (node: CompareNode, depth: number) => {
     for (const child of node.children ?? []) {
       if (!visible(child, filter)) continue;
-      const dirChild = isDirectory(child);
-      const isExpanded = dirChild && expanded.has(child.path);
-      rows.push({ node: child, depth, isDirectory: dirChild, expanded: isExpanded });
+      const isChildDirectory = isDirectory(child);
+      const isExpanded = isChildDirectory && expanded.has(child.path);
+      rows.push({ node: child, depth, isDirectory: isChildDirectory, expanded: isExpanded });
       if (isExpanded) walk(child, depth + 1);
     }
   };
@@ -60,19 +63,23 @@ export function flattenTree(
   return rows;
 }
 
-export interface Crumb {
+/** One breadcrumb: a folder name and its relative path ('' for the root). */
+export type Crumb = {
   name: string;
   path: string;
-}
+};
 
+/** Breadcrumbs from the root down to `path`; the first one is the root. */
 export function breadcrumbs(path: string): Crumb[] {
   const crumbs: Crumb[] = [{ name: '', path: '' }];
   if (path === '') return crumbs;
   const parts = path.split('/');
-  parts.forEach((name, i) => crumbs.push({ name, path: parts.slice(0, i + 1).join('/') }));
+  for (const [i, name] of parts.entries())
+    crumbs.push({ name, path: parts.slice(0, i + 1).join('/') });
   return crumbs;
 }
 
+/** Paths of every folder under `node`, for "Expand all". */
 export function collectDirectoryPaths(node: CompareNode): string[] {
   const paths: string[] = [];
   const walk = (n: CompareNode) => {
@@ -87,8 +94,12 @@ export function collectDirectoryPaths(node: CompareNode): string[] {
   return paths;
 }
 
-/** Joins an absolute root and a POSIX relative path. */
+/**
+ * Joins an absolute root and a POSIX relative path (as the server reports them).
+ * The result uses the root's separator, so Windows roots like `C:\a` stay backslashed.
+ */
 export function joinPath(root: string, rel: string): string {
   if (rel === '') return root;
-  return `${root.replace(/\/+$/, '')}/${rel}`;
+  const sep = root.includes('\\') && !root.includes('/') ? '\\' : '/';
+  return `${root.replace(/[\\/]+$/, '')}${sep}${rel.split('/').join(sep)}`;
 }

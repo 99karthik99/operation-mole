@@ -1,21 +1,29 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { mkdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { simpleGit, type SimpleGit } from 'simple-git';
 import { compareNames } from '../compare/sort.ts';
 import { CompareInputError, errorMessage } from '../errors.ts';
 
-export interface GitServiceOptions {
+/** Options for {@link GitService}. */
+export type GitServiceOptions = {
   /** URL schemes allowed for cloning. scp-style `git@host:path` counts as `ssh`. */
   allowedProtocols?: string[];
-}
+};
 
-export interface BranchList {
+/** Branches of a cloned repo, sorted with `compareNames`, and the remote default branch. */
+export type BranchList = {
   defaultBranch: string;
   branches: string[];
-}
+};
 
-/** Inherited variables git needs: tools, home (git config, credentials), SSH agent, proxies. */
+/**
+ * Inherited variables git needs on Linux, macOS and Windows: tools, home (git config,
+ * credentials), temp dirs, SSH agent, proxies. Windows git can't find its config without
+ * USERPROFILE/HOMEDRIVE/HOMEPATH, nor open network sockets without SystemRoot.
+ */
 const INHERITED_ENV = [
   'PATH',
   'HOME',
@@ -25,6 +33,21 @@ const INHERITED_ENV = [
   'LC_ALL',
   'TMPDIR',
   'SSH_AUTH_SOCK',
+  'XDG_CONFIG_HOME',
+  'USERPROFILE',
+  'HOMEDRIVE',
+  'HOMEPATH',
+  'USERNAME',
+  'APPDATA',
+  'LOCALAPPDATA',
+  'PROGRAMDATA',
+  'SystemRoot',
+  'SystemDrive',
+  'windir',
+  'ComSpec',
+  'PATHEXT',
+  'TEMP',
+  'TMP',
   'HTTP_PROXY',
   'HTTPS_PROXY',
   'NO_PROXY',
@@ -33,6 +56,61 @@ const INHERITED_ENV = [
   'no_proxy',
 ];
 const GIT_ENV = ['GIT_TERMINAL_PROMPT', 'GIT_SSH_COMMAND', 'GIT_ALLOW_PROTOCOL'];
+
+type Env = Record<string, string | undefined>;
+
+function inherit(source: Env, keys: string[]): Record<string, string> {
+  return Object.fromEntries(
+    keys.flatMap((key) => {
+      const value = source[key];
+      return value === undefined ? [] : [[key, value]];
+    }),
+  );
+}
+
+/**
+ * The server's own `core.sshCommand` (from its system/global git config), if set.
+ * Read once at startup: setting GIT_SSH_COMMAND would otherwise silently override it.
+ */
+export function configuredSshCommand(source: Env = process.env): string | undefined {
+  try {
+    const value = execFileSync('git', ['config', '--get', 'core.sshCommand'], {
+      // Outside any repo, so only the machine's system and global config apply.
+      cwd: tmpdir(),
+      env: {
+        ...inherit(source, [...INHERITED_ENV, 'GIT_CONFIG_NOSYSTEM']),
+        GIT_CEILING_DIRECTORIES: tmpdir(),
+      },
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return value === '' ? undefined : value;
+  } catch {
+    // Exit code 1: not set.
+    return undefined;
+  }
+}
+
+/**
+ * The environment git runs with: an allowlist of `source` (normally `process.env`), plus
+ * settings that keep git non-interactive and limited to the allowed protocols. Git still
+ * reads the server's own config (via HOME/USERPROFILE/XDG_CONFIG_HOME); a configured
+ * `core.sshCommand` is kept, with batch mode added.
+ */
+export function gitEnvironment(
+  source: Env,
+  allowedProtocols: string[],
+  sshCommand?: string,
+): Record<string, string> {
+  return {
+    ...inherit(source, INHERITED_ENV),
+    // Fail instead of waiting for a password or host-key prompt nobody can answer.
+    GIT_TERMINAL_PROMPT: '0',
+    GIT_SSH_COMMAND: source['GIT_SSH_COMMAND'] ?? `${sshCommand ?? 'ssh'} -o BatchMode=yes`,
+    // Restrict transports git may use, including for submodules and redirects.
+    GIT_ALLOW_PROTOCOL: allowedProtocols.join(':'),
+  };
+}
 
 const SCP_LIKE = /^[A-Za-z0-9._-]+@[A-Za-z0-9.-]+:[A-Za-z0-9._~/-]+$/;
 
@@ -59,20 +137,7 @@ export class GitService {
 
   constructor(options: GitServiceOptions = {}) {
     this.#allowed = options.allowedProtocols ?? ['https', 'ssh'];
-    const inherited = Object.fromEntries(
-      INHERITED_ENV.flatMap((key) => {
-        const value = process.env[key];
-        return value === undefined ? [] : [[key, value]];
-      }),
-    );
-    this.#env = {
-      ...inherited,
-      // Fail instead of waiting for a password or host-key prompt nobody can answer.
-      GIT_TERMINAL_PROMPT: '0',
-      GIT_SSH_COMMAND: process.env.GIT_SSH_COMMAND ?? 'ssh -o BatchMode=yes',
-      // Restrict transports git may use, including for submodules and redirects.
-      GIT_ALLOW_PROTOCOL: this.#allowed.join(':'),
-    };
+    this.#env = gitEnvironment(process.env, this.#allowed, configuredSshCommand());
   }
 
   #git(dir: string): SimpleGit {
@@ -118,7 +183,7 @@ export class GitService {
       await rm(dir, { recursive: true, force: true });
       throw new CompareInputError(`Could not clone ${url}: ${gitError(err)}`);
     }
-    return this.branches(dir);
+    return await this.branches(dir);
   }
 
   async branches(dir: string): Promise<BranchList> {
@@ -137,11 +202,14 @@ export class GitService {
       await git.raw(['fetch', '--prune', '--quiet', 'origin', '+refs/heads/*:refs/heads/*']);
       const head = await git.raw(['ls-remote', '--symref', 'origin', 'HEAD']);
       const match = /^ref: refs\/heads\/(\S+)\s+HEAD/m.exec(head);
-      if (match?.[1]) await git.raw(['symbolic-ref', 'HEAD', `refs/heads/${match[1]}`]);
+      const defaultBranch = match?.[1];
+      if (defaultBranch !== undefined && defaultBranch !== '') {
+        await git.raw(['symbolic-ref', 'HEAD', `refs/heads/${defaultBranch}`]);
+      }
     } catch (err) {
       throw new CompareInputError(`Could not fetch: ${gitError(err)}`);
     }
-    return this.branches(dir);
+    return await this.branches(dir);
   }
 
   /** Ensures `worktreeDir` holds the current tip of `branch`; returns the folder. */

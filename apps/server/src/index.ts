@@ -1,34 +1,30 @@
 import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { buildApp } from './app.ts';
+import { loadServerConfig } from './config/server-config.ts';
 
-const port = Number(process.env.API_PORT ?? 5181);
-// Local tool with filesystem access: bind to loopback only.
-const host = process.env.HOST ?? '127.0.0.1';
-const webDist = fileURLToPath(new URL('../../web/dist', import.meta.url));
-const staticDir =
-  process.env.NODE_ENV === 'production' && existsSync(webDist) ? webDist : undefined;
+const repoRoot = path.join(import.meta.dirname, '..', '..', '..');
+const loaded = loadServerConfig(process.env, process.argv, repoRoot);
+if (!loaded.ok) {
+  console.error(loaded.error.message);
+  process.exit(1);
+}
+const config = loaded.value;
 
-// Compare the repo's example folders unless OM_LEFT / OM_RIGHT say otherwise.
-const examples = fileURLToPath(new URL('../../../examples', import.meta.url));
-const defaultLeft = process.env.OM_LEFT ?? `${examples}/left`;
-const defaultRight = process.env.OM_RIGHT ?? `${examples}/right`;
-
-// Sessions, cloned repos and the database. Kept out of git (see .gitignore).
-const dataDir =
-  process.env.OM_DATA_DIR ?? fileURLToPath(new URL('../../../.data', import.meta.url));
+const webDist = path.join(repoRoot, 'apps', 'web', 'dist');
+const staticDir = config.isProduction && existsSync(webDist) ? webDist : undefined;
 
 const app = buildApp({
   logger: true,
-  dataDir,
-  defaultLeft,
-  defaultRight,
-  ...(staticDir ? { staticDir } : {}),
+  dataDir: config.dataDir,
+  defaultLeft: config.defaultLeft,
+  defaultRight: config.defaultRight,
+  ...(staticDir === undefined ? {} : { staticDir }),
 });
 
 try {
-  await app.listen({ port, host });
-} catch (err) {
-  app.log.error(err);
+  await app.listen({ port: config.port, host: config.host });
+} catch (error) {
+  app.log.error(error);
   process.exit(1);
 }

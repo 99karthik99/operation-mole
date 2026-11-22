@@ -1,3 +1,7 @@
+# Same line endings on every OS: LF in the working tree, whatever core.autocrlf says
+# (Git for Windows defaults it to true, which would make `prettier --check` fail everywhere).
+* text=auto eol=lf
+
 # Example data must stay byte-exact (CRLF, trailing spaces, binary): never normalize it.
 examples/left/** -text
 examples/right/** -text

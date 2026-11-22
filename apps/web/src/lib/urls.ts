@@ -1,3 +1,4 @@
+/** The pages inside a session, as URL segments. */
 export type SessionPage = 'folders' | 'files' | 'lab';
 
 /** URL of a session, or of one of its pages. */

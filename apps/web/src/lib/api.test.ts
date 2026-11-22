@@ -22,4 +22,9 @@ describe('api errors', () => {
     );
     await expect(getDefaults()).rejects.toThrow('Nope');
   });
+
+  it('rejects a successful response of the wrong shape', async () => {
+    server.use(http.get('*/api/defaults', () => HttpResponse.json({ left: 42 })));
+    await expect(getDefaults()).rejects.toThrow(/unexpected response/i);
+  });
 });

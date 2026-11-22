@@ -8,12 +8,12 @@ import { USER, repoInfo } from '../test/handlers.ts';
 import { renderApp } from '../test/render.tsx';
 import { server } from '../test/server.ts';
 
-interface CompareBody {
+type CompareBody = {
   left: Source;
   right: Source;
   user?: string;
   sessionId?: string;
-}
+};
 
 let requests: CompareBody[];
 let repos: RepoInfo[];
@@ -29,9 +29,9 @@ beforeEach(() => {
   server.use(
     http.get('*/api/users/:user/sessions/:sessionId', ({ params }) =>
       HttpResponse.json({
-        user: params.user,
+        user: params['user'],
         session: {
-          id: params.sessionId,
+          id: params['sessionId'],
           name: 'Release review',
           createdAt: '',
           updatedAt: '',
@@ -54,11 +54,11 @@ beforeEach(() => {
       return HttpResponse.json(repo, { status: 201 });
     }),
     http.post('*/api/users/:user/sessions/:sessionId/repos/:repoId/fetch', ({ params }) => {
-      fetchCalls.push(String(params.repoId));
+      fetchCalls.push(String(params['repoId']));
       repos = repos.map((r) =>
-        r.id === params.repoId ? { ...r, branches: [...r.branches, 'hotfix'] } : r,
+        r.id === params['repoId'] ? { ...r, branches: [...r.branches, 'hotfix'] } : r,
       );
-      return HttpResponse.json(repos.find((r) => r.id === params.repoId));
+      return HttpResponse.json(repos.find((r) => r.id === params['repoId']));
     }),
     http.post('*/api/compare/directories', async ({ request }) => {
       const body = (await request.json()) as CompareBody;

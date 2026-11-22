@@ -13,7 +13,7 @@ describe('theme', () => {
     stubMatchMedia(true);
     setTheme('light');
     expect(getTheme()).toBe('light');
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset['theme']).toBe('light');
     expect(localStorage.getItem('om-theme')).toBe('light');
   });
 

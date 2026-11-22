@@ -1,5 +1,6 @@
 import type { RepoInfo, Source } from '@om/shared';
 
+/** One side of a comparison: `left` is Base, `right` is Target in the UI. */
 export type Side = 'left' | 'right';
 
 /**
@@ -8,10 +9,12 @@ export type Side = 'left' | 'right';
  */
 export function sourceFromParams(params: URLSearchParams, side: Side): Source | undefined {
   const path = params.get(side);
-  if (path) return { type: 'path', path };
+  if (path !== null && path !== '') return { type: 'path', path };
   const repoId = params.get(`${side}Repo`);
   const branch = params.get(`${side}Branch`);
-  if (repoId && branch) return { type: 'git', repoId, branch };
+  if (repoId !== null && repoId !== '' && branch !== null && branch !== '') {
+    return { type: 'git', repoId, branch };
+  }
   return undefined;
 }
 
@@ -24,6 +27,7 @@ function writeSource(params: URLSearchParams, side: Side, source: Source): void 
   }
 }
 
+/** The `?left…&right…` query string for two sources, in the format {@link sourceFromParams} reads. */
 export function sourcesSearch(left: Source, right: Source): string {
   const params = new URLSearchParams();
   writeSource(params, 'left', left);
@@ -31,7 +35,8 @@ export function sourcesSearch(left: Source, right: Source): string {
   return `?${params}`;
 }
 
-export function sourceLabel(source: Source, repos: Pick<RepoInfo, 'id' | 'name'>[]): string {
+/** Display name for a source: its path, or `repo @ branch` (`unknown repo` if the repo is gone). */
+export function sourceLabel(source: Source, repos: Array<Pick<RepoInfo, 'id' | 'name'>>): string {
   if (source.type === 'path') return source.path;
   const repo = repos.find((r) => r.id === source.repoId);
   return `${repo?.name ?? 'unknown repo'} @ ${source.branch}`;

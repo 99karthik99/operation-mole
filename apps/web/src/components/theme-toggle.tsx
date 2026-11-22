@@ -1,7 +1,9 @@
 import { Moon, Sun } from 'lucide-react';
+import type { JSX } from 'react';
 import { setTheme, useTheme } from '../lib/theme.ts';
 
-export function ThemeToggle() {
+/** Button that switches between light and dark mode. */
+export function ThemeToggle(): JSX.Element {
   const theme = useTheme();
   const next = theme === 'dark' ? 'light' : 'dark';
   const label = `Switch to ${next} mode`;

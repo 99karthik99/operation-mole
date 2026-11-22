@@ -61,4 +61,4 @@ At the root, `404.html` (identical) sorts before the lettered files.
 
 - **Unreadable files** (shown red as errors): a permission-locked file can't be stored in the repo. The server tests cover this case with a temporary file.
 - **Files too large to display** (over 5 MB): left out to keep the repo small. The API tests cover this case with a lower limit.
-- **Empty folders and git**: git doesn't store empty folders, so `npm install` recreates `empty-both/` and `empty-in-base/` (`scripts/ensure-example-dirs.mjs`, run as `postinstall`).
+- **Empty folders and git**: git doesn't store empty folders, so `pnpm install` recreates `empty-both/` and `empty-in-base/` (`scripts/ensure-example-dirs.ts`, run as `postinstall`).

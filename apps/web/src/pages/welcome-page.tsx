@@ -1,21 +1,23 @@
-import { usernameSchema } from '@om/shared';
-import { useId, useState, type SubmitEvent } from 'react';
+import { UsernameSchema } from '@om/shared';
+import { useId, useState, type JSX, type SubmitEvent } from 'react';
 import { Navigate, useNavigate } from 'react-router';
-import { Logo } from '../components/Logo.tsx';
+import { Logo } from '../components/logo.tsx';
 import { getStoredUser, storeUser } from '../lib/user.ts';
 
-export function WelcomePage() {
+/** Asks for a username; skips straight to the remembered user's sessions. */
+export function WelcomePage(): JSX.Element {
   const navigate = useNavigate();
   const [name, setName] = useState('');
   const [error, setError] = useState<string>();
   const id = useId();
   const stored = getStoredUser();
 
-  if (stored) return <Navigate replace to={`/u/${encodeURIComponent(stored)}`} />;
+  if (stored !== undefined && stored !== '')
+    return <Navigate replace to={`/u/${encodeURIComponent(stored)}`} />;
 
   const submit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const parsed = usernameSchema.safeParse(name);
+    const parsed = UsernameSchema.safeParse(name);
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Invalid username');
       return;
@@ -50,7 +52,7 @@ export function WelcomePage() {
           placeholder="e.g. alex"
           className="w-full rounded-md border border-line bg-canvas px-3 py-2 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/30"
         />
-        {error && (
+        {error !== undefined && error !== '' && (
           <p role="alert" className="text-sm text-error">
             {error}
           </p>

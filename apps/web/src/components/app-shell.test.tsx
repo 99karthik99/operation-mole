@@ -53,10 +53,10 @@ describe('AppShell', () => {
     const user = userEvent.setup();
     renderApp('/');
     await user.click(screen.getByRole('button', { name: 'Switch to dark mode' }));
-    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.dataset['theme']).toBe('dark');
     expect(localStorage.getItem('om-theme')).toBe('dark');
     await user.click(screen.getByRole('button', { name: 'Switch to light mode' }));
-    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(document.documentElement.dataset['theme']).toBe('light');
     expect(localStorage.getItem('om-theme')).toBe('light');
   });
 

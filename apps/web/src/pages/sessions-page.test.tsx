@@ -29,7 +29,7 @@ beforeEach(() => {
       return HttpResponse.json(created, { status: 201 });
     }),
     http.delete('*/api/users/:user/sessions/:id', ({ params }) => {
-      sessions = sessions.filter((s) => s.id !== params.id);
+      sessions = sessions.filter((s) => s.id !== params['id']);
       return new HttpResponse(null, { status: 204 });
     }),
     sessionDetailHandler(),

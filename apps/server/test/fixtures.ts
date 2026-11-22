@@ -3,9 +3,9 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 /** A directory spec: string/Buffer = file contents, object = subdirectory, { symlink } = symbolic link. */
-export interface TreeSpec {
+export type TreeSpec = {
   [name: string]: string | Buffer | TreeSpec | { symlink: string };
-}
+};
 
 function isSymlink(v: unknown): v is { symlink: string } {
   return typeof v === 'object' && v !== null && !Buffer.isBuffer(v) && 'symlink' in v;
@@ -25,8 +25,16 @@ export async function writeTree(root: string, spec: TreeSpec): Promise<void> {
   }
 }
 
+/** A temp folder for one test file, with helpers to build left/right trees in it. */
+export type Workspace = {
+  readonly base: string;
+  /** Writes `left` and `right` into a fresh subfolder and returns their paths. */
+  pair(left: TreeSpec, right: TreeSpec): Promise<{ left: string; right: string }>;
+  cleanup(): Promise<void>;
+};
+
 /** Creates a temp workspace; returns helpers to build left/right trees and clean up. */
-export async function createWorkspace() {
+export async function createWorkspace(): Promise<Workspace> {
   const base = await mkdtemp(path.join(tmpdir(), 'om-test-'));
   return {
     base,

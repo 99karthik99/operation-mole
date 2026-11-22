@@ -1,17 +1,17 @@
 import type { RepoInfo, Source } from '@om/shared';
 import { ArrowLeftRight } from 'lucide-react';
-import { useState, type SubmitEvent } from 'react';
+import { useState, type JSX, type SubmitEvent } from 'react';
 import { emptyDraft, isComplete, toSource, type SourceDraft } from '../lib/source-draft.ts';
-import { SourcePicker } from './SourcePicker.tsx';
+import { SourcePicker } from './source-picker.tsx';
 
-interface CompareFormProps {
+type CompareFormProps = {
   initialLeft: Source | undefined;
   initialRight: Source | undefined;
   repos: RepoInfo[];
   user: string;
   sessionId: string;
   onSubmit: (left: Source, right: Source) => void;
-}
+};
 
 /** Base and target pickers with swap and compare. Remount (via `key`) to reset from props. */
 export function CompareForm({
@@ -21,14 +21,14 @@ export function CompareForm({
   user,
   sessionId,
   onSubmit,
-}: CompareFormProps) {
+}: CompareFormProps): JSX.Element {
   const [left, setLeft] = useState<SourceDraft>(initialLeft ?? emptyDraft);
   const [right, setRight] = useState<SourceDraft>(initialRight ?? emptyDraft);
-  const ready = isComplete(left) && isComplete(right);
+  const isReady = isComplete(left) && isComplete(right);
 
   const submit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (ready) onSubmit(toSource(left), toSource(right));
+    if (isReady) onSubmit(toSource(left), toSource(right));
   };
 
   const common = { repos, user, sessionId };
@@ -50,7 +50,7 @@ export function CompareForm({
       <SourcePicker side="Target" value={right} onChange={setRight} {...common} />
       <button
         type="submit"
-        disabled={!ready}
+        disabled={!isReady}
         className="rounded-md bg-accent px-4 py-1.5 text-sm font-medium text-white hover:bg-accent/90 disabled:opacity-50"
       >
         Compare

@@ -22,26 +22,33 @@
 
 ### Requirements
 
-| Tool    | Version                                | Check           |
-| ------- | -------------------------------------- | --------------- |
-| Node.js | 24 or later (26 recommended, `.nvmrc`) | `node -v`       |
-| npm     | 10 or later (comes with Node)          | `npm -v`        |
-| git     | any recent version                     | `git --version` |
+| Tool    | Version                    | Check           |
+| ------- | -------------------------- | --------------- |
+| Node.js | 26 or later (`.nvmrc`)     | `node -v`       |
+| pnpm    | 12.21.0 (`packageManager`) | `pnpm -v`       |
+| git     | any recent version         | `git --version` |
+
+Install pnpm once with `npm install -g pnpm@12.21.0`. Node 26 no longer bundles corepack. After that, use only pnpm in this repo, never `npm install`: `pnpm-lock.yaml` is the only lockfile. For a clean, reproducible install (CI), run `pnpm install --frozen-lockfile`.
 
 OM uses Node's built-in SQLite (`node:sqlite`), so it needs no database server or extra installs.
+
+It runs on **Linux, macOS and Windows**. Git uses the machine's own git config, credential helpers and SSH keys. On Windows, two optional settings make the symlink examples real symlinks (otherwise git checks them out as small text files and the symlink tests are skipped):
+
+1. Turn on **Developer Mode** (Settings → System → For developers), so symlinks can be created without admin rights.
+2. Clone with `git clone -c core.symlinks=true …`. In an existing clone, run `git config core.symlinks true`, delete the `examples` folder, then run `git checkout -- examples` and `pnpm install` (which recreates the empty example folders).
 
 ### Install
 
 From the project folder:
 
 ```bash
-npm install
+pnpm install
 ```
 
 ### Run in development
 
 ```bash
-npm run dev
+pnpm dev
 ```
 
 This starts two processes:
@@ -56,11 +63,11 @@ Open http://localhost:5180, enter a username, create a session, then open **Fold
 ### Run in production
 
 ```bash
-npm run build
+pnpm build
 ```
 
 ```bash
-npm start
+pnpm start
 ```
 
 This serves the built app and the API together on http://127.0.0.1:5181.
@@ -68,10 +75,12 @@ This serves the built app and the API together on http://127.0.0.1:5181.
 ### Check everything
 
 ```bash
-npm run check
+pnpm check
 ```
 
-This runs type checks, lint, a format check and all tests. Git tests create real temporary repos, so git must be installed.
+This runs type checks, lint (zero warnings allowed), a format check and all tests. Git tests create real temporary repos, so git must be installed. `pnpm test:coverage` also enforces 80% line and branch coverage. Contribution rules are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+The server reads a few optional environment variables (port, host, default folders, data folder). They're listed in [.env.example](.env.example).
 
 ## Using OM
 
@@ -130,7 +139,7 @@ To start fresh, stop the server and delete `.data/`.
 
 | Symptom                                    | Fix                                                                                               |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| "Can't reach the OM API server"            | The API isn't running. Restart `npm run dev` and check its output for errors.                     |
+| "Can't reach the OM API server"            | The API isn't running. Restart `pnpm dev` and check its output for errors.                        |
 | "Could not clone …: Authentication failed" | Make sure the machine running OM can run `git clone <url>` itself (SSH key or credential helper). |
 | A branch you just pushed is missing        | Click **Fetch latest** for that repo.                                                             |
 | Port 5180 or 5181 is busy                  | Stop the other process, or set `API_PORT` and change `server.port` in `apps/web/vite.config.ts`.  |

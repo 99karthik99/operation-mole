@@ -1,21 +1,39 @@
 {
   "compilerOptions": {
-    "target": "ES2024",
-    "lib": ["ES2024"],
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    /* Language & runtime */
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    /* Strictness (CONTRIBUTING.md §4: never disable these) */
     "strict": true,
     "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
     "noImplicitOverride": true,
+    "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": false,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
+
+    /* Module hygiene */
     "verbatimModuleSyntax": true,
     "erasableSyntaxOnly": true,
     "isolatedModules": true,
-    "allowImportingTsExtensions": true,
-    "noEmit": true,
-    "skipLibCheck": true,
+    "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+
+    /*
+     * Output. Deviation from CONTRIBUTING.md §4: OM never emits JS. The server runs its .ts
+     * sources with Node's type stripping, Vite bundles the web app, and @om/shared is consumed
+     * as source. So tsc only type-checks (`noEmit`), and relative imports keep `.ts`.
+     */
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "newLine": "lf",
+    "skipLibCheck": true
   }
 }
